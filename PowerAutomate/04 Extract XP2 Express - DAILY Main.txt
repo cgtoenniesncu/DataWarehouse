@@ -524,7 +524,7 @@ WHERE b.MEMBER_NBR IS NOT NULL
 	SET @Maxrownum = @Maxrownum - 1
 END''' Timeout: 3000 Result=> QueryResult5
 SET MessageToLog TO $'''Starting Fact History Individual Load'''
-CALL LogProgress
+DISABLE CALL LogProgress
 /# LOAD FACT HISTORY INDIVIDUAL
 #/
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #IndividualDates
@@ -590,7 +590,7 @@ SET @incvar = @incvar + 1
 
 END''' Timeout: 600 Result=> QueryResult6
 SET MessageToLog TO $'''Completed Fact History Individual Load'''
-CALL LogProgress
+DISABLE CALL LogProgress
 /# LOAD FACT MEMBER STATUS
 #/
 DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''SELECT 
