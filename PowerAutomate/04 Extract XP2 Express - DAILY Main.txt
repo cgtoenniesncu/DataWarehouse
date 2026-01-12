@@ -1,25 +1,27 @@
-SET FlowName TO $'''04_Extract_XP2_Express_DAILY'''
-SET MessageToLog TO $'''Starting Flow'''
-SET LastErrorMessage TO $'''none'''
-CALL LogProgress
-# OPEN SQL CONNECTION TO NCURPT2
-Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
-# FIND TABLE EXPRESS TABLES WITH TIMESTAMP
-@@copilotGeneratedAction: 'False'
+
+FUNCTION Main_copy GLOBAL
+    SET FlowName TO $'''04_Extract_XP2_Express_DAILY'''
+    SET MessageToLog TO $'''Starting Flow'''
+    SET LastErrorMessage TO $'''none'''
+    CALL LogProgress
+    # OPEN SQL CONNECTION TO NCURPT2
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+    # FIND TABLE EXPRESS TABLES WITH TIMESTAMP
+    @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
 
 Select * FROM XP2_Express_Tables where HasTimestamp = 1 and tablename <> \'AGR_ACTIVITYTOTAL\'''' Timeout: 600 Result=> ExpressTables
-Database.Close Connection: SQLConnection
-# SET VARIABLE EQUAL TO NUMBER OF TABLES W TIMESTAMPS
-SET NewVar TO ExpressTables.RowsCount
-Text.ToNumber Text: NewVar Number=> TextAsNumber
-SET MessageToLog TO $'''Loading %TextAsNumber% express tables with TIMESTAMP into ODS'''
-CALL LogProgress
-SET FailedCount TO 0
-# LOAD TABLES WITH TIMESTAMP INTO ODS
-LOOP WHILE (TextAsNumber) > (0)
-    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
-    @@copilotGeneratedAction: 'False'
+    Database.Close Connection: SQLConnection
+    # SET VARIABLE EQUAL TO NUMBER OF TABLES W TIMESTAMPS
+    SET NewVar TO ExpressTables.RowsCount
+    Text.ToNumber Text: NewVar Number=> TextAsNumber
+    SET MessageToLog TO $'''Loading %TextAsNumber% express tables with TIMESTAMP into ODS'''
+    CALL LogProgress
+    SET FailedCount TO 0
+    # LOAD TABLES WITH TIMESTAMP INTO ODS
+    LOOP WHILE (TextAsNumber) > (0)
+        Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+        @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
 
 Drop Table if Exists #tables
@@ -29,13 +31,13 @@ select TableName, [Schema], rownum FROM (
 	)a WHERE a.rownum = %TextAsNumber%
 
 ''' Timeout: 600 Result=> tablename
-    LOOP FOREACH CurrentItem IN tablename
-        SET currentTableName TO CurrentItem['TableName']
-        SET currentSchemaName TO CurrentItem['Schema']
-    END
-    SET loadVar TO $'''Complete'''
-    # DEPRECATED STEP
-    @@copilotGeneratedAction: 'False'
+        LOOP FOREACH CurrentItem IN tablename
+            SET currentTableName TO CurrentItem['TableName']
+            SET currentSchemaName TO CurrentItem['Schema']
+        END
+        SET loadVar TO $'''Complete'''
+        # DEPRECATED STEP
+        @@copilotGeneratedAction: 'False'
 DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
 
 Drop Table if Exists #tables
@@ -76,7 +78,7 @@ End''' Timeout: 900 Result=> QueryResult
 ON ERROR SqlStatementError
     SET loadVar TO $'''Failed'''
 END
-    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+        Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
 
 Drop Table if Exists #tables
 
@@ -116,41 +118,41 @@ End''' Timeout: 900 Result=> QueryResult
     ON ERROR SqlStatementError
         SET loadVar TO $'''Failed'''
     END
-    IF loadVar = $'''Failed''' THEN
-        Variables.IncreaseVariable Value: FailedCount IncrementValue: 1
-        ERROR => LastError
-        SET LastErrorMessage TO LastError.Message
-        SET MessageToLog TO $'''Error Executing SQL. See log file for details'''
-        CALL LogProgress
-    END
-    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GetDate())
+        IF loadVar = $'''Failed''' THEN
+            Variables.IncreaseVariable Value: FailedCount IncrementValue: 1
+            ERROR => LastError
+            SET LastErrorMessage TO LastError.Message
+            SET MessageToLog TO $'''Error Executing SQL. See log file for details'''
+            CALL LogProgress
+        END
+        Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GetDate())
 
 
 DELETE FROM XP2_Daily_ODS_New.dbo.LoadStatus where TableName = \'%currentTableName%\' AND LoadDate = @ProcessDate
 INSERT INTO XP2_Daily_ODS_new.dbo.LoadStatus (TableName, LoadDate, Status)
 VALUES (\'%currentTableName%\', @ProcessDate, \'%loadVar%\')''' Timeout: 30 Result=> QueryResult3
-    Database.Close Connection: SQLConnection
-    Variables.DecreaseVariable Value: TextAsNumber DecrementValue: 1
-END
-SET MessageToLog TO $'''Completed tables with TIMESTAMP. %FailedCount% tables had errors!'''
-CALL LogProgress
-# OPEN DATABASE CONNECTION
-Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
-# FIND EXPRESS TABLES WITHOUT TIMESTAMP
-@@copilotGeneratedAction: 'False'
+        Database.Close Connection: SQLConnection
+        Variables.DecreaseVariable Value: TextAsNumber DecrementValue: 1
+    END
+    SET MessageToLog TO $'''Completed tables with TIMESTAMP. %FailedCount% tables had errors!'''
+    CALL LogProgress
+    # OPEN DATABASE CONNECTION
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+    # FIND EXPRESS TABLES WITHOUT TIMESTAMP
+    @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
 
 Select * FROM XP2_Express_Tables where HasTimestamp = 0 and tablename <> \'AGR_ACTIVITYTOTAL\'''' Timeout: 600 Result=> ExpressTables2
-Database.Close Connection: SQLConnection
-SET NewVar2 TO ExpressTables2.RowsCount
-Text.ToNumber Text: NewVar2 Number=> TextAsNumber2
-SET MessageToLog TO $'''Loading %TextAsNumber2% express tables without TIMESTAMP into ODS'''
-CALL LogProgress
-# LOAD TABLES WITHOUT TIMESTAMPS INTO ODS USING CURRENT DATE AT THE TIMESTAMP
-SET FailedCount2 TO 0
-LOOP WHILE (TextAsNumber2) > (0)
-    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
-    @@copilotGeneratedAction: 'False'
+    Database.Close Connection: SQLConnection
+    SET NewVar2 TO ExpressTables2.RowsCount
+    Text.ToNumber Text: NewVar2 Number=> TextAsNumber2
+    SET MessageToLog TO $'''Loading %TextAsNumber2% express tables without TIMESTAMP into ODS'''
+    CALL LogProgress
+    # LOAD TABLES WITHOUT TIMESTAMPS INTO ODS USING CURRENT DATE AT THE TIMESTAMP
+    SET FailedCount2 TO 0
+    LOOP WHILE (TextAsNumber2) > (0)
+        Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+        @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
 
 Drop Table if Exists #tables
@@ -160,12 +162,12 @@ select TableName, [Schema], rownum FROM (
 	)a WHERE a.rownum = %TextAsNumber2%
 
 ''' Timeout: 600 Result=> tablename2
-    LOOP FOREACH CurrentItem IN tablename2
-        SET currentTableName2 TO CurrentItem['TableName']
-        SET currentSchemaName2 TO CurrentItem['Schema']
-    END
-    SET loadVar2 TO $'''Complete'''
-    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+        LOOP FOREACH CurrentItem IN tablename2
+            SET currentTableName2 TO CurrentItem['TableName']
+            SET currentSchemaName2 TO CurrentItem['Schema']
+        END
+        SET loadVar2 TO $'''Complete'''
+        Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
 
 Drop Table if Exists #tables
 
@@ -201,39 +203,39 @@ End''' Timeout: 900 Result=> QueryResult
     ON ERROR SqlStatementError
         SET loadVar2 TO $'''Failed'''
     END
-    IF loadVar2 = $'''Failed''' THEN
-        Variables.IncreaseVariable Value: FailedCount2 IncrementValue: 1
-        ERROR => LastError
-        SET LastErrorMessage TO LastError.Message
-        SET MessageToLog TO $'''Error Executing SQL. See log file for details'''
-        CALL LogProgress
-    END
-    @@copilotGeneratedAction: 'False'
+        IF loadVar2 = $'''Failed''' THEN
+            Variables.IncreaseVariable Value: FailedCount2 IncrementValue: 1
+            ERROR => LastError
+            SET LastErrorMessage TO LastError.Message
+            SET MessageToLog TO $'''Error Executing SQL. See log file for details'''
+            CALL LogProgress
+        END
+        @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GetDate())
 
 
 DELETE FROM XP2_Daily_ODS_New.dbo.LoadStatus where TableName = \'%currentTableName2%\' AND LoadDate = @ProcessDate
 INSERT INTO XP2_Daily_ODS_new.dbo.LoadStatus (TableName, LoadDate, Status)
 VALUES (\'%currentTableName2%\', @ProcessDate, \'%loadVar2%\')''' Timeout: 30 Result=> QueryResult3
-    Database.Close Connection: SQLConnection
-    Variables.DecreaseVariable Value: TextAsNumber2 DecrementValue: 1
-END
-SET MessageToLog TO $'''Completed tables without TIMESTAMP. %FailedCount2% tables had errors!'''
-CALL LogProgress
-Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
-# FIND AGR_ACTIVITY Table
-@@copilotGeneratedAction: 'False'
+        Database.Close Connection: SQLConnection
+        Variables.DecreaseVariable Value: TextAsNumber2 DecrementValue: 1
+    END
+    SET MessageToLog TO $'''Completed tables without TIMESTAMP. %FailedCount2% tables had errors!'''
+    CALL LogProgress
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+    # FIND AGR_ACTIVITY Table
+    @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
 
 Select * FROM XP2_Express_Tables where tablename = \'AGR_ACTIVITYTOTAL\'''' Timeout: 600 Result=> ExpressTables3
-Database.Close Connection: SQLConnection
-# SET VARIABLE EQUAL TO NUMBER TABLES FOUND
-SET NewVar TO ExpressTables3.RowsCount
-Text.ToNumber Text: NewVar Number=> TextAsNumber
-# LOAD AGR_ACTIVITYTOTALS TABLE INTO ODS
-LOOP WHILE (TextAsNumber) > (0)
-    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
-    @@copilotGeneratedAction: 'False'
+    Database.Close Connection: SQLConnection
+    # SET VARIABLE EQUAL TO NUMBER TABLES FOUND
+    SET NewVar TO ExpressTables3.RowsCount
+    Text.ToNumber Text: NewVar Number=> TextAsNumber
+    # LOAD AGR_ACTIVITYTOTALS TABLE INTO ODS
+    LOOP WHILE (TextAsNumber) > (0)
+        Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+        @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS
 
 Drop Table if Exists #tables
@@ -243,12 +245,12 @@ select TableName, [Schema], rownum FROM (
 	)a WHERE a.rownum = %TextAsNumber%
 
 ''' Timeout: 600 Result=> tablename
-    LOOP FOREACH CurrentItem IN tablename
-        SET currentTableName TO CurrentItem['TableName']
-        SET currentSchemaName TO CurrentItem['Schema']
-    END
-    SET loadVar3 TO $'''Complete'''
-    @@copilotGeneratedAction: 'False'
+        LOOP FOREACH CurrentItem IN tablename
+            SET currentTableName TO CurrentItem['TableName']
+            SET currentSchemaName TO CurrentItem['Schema']
+        END
+        SET loadVar3 TO $'''Complete'''
+        @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS
 Drop Table if Exists #tables
 
@@ -288,19 +290,19 @@ End''' Timeout: 900 Result=> QueryResult
     ON ERROR SqlStatementError
         SET loadVar3 TO $'''Failed'''
     END
-    @@copilotGeneratedAction: 'False'
+        @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GetDate())
 
 
 DELETE FROM XP2_Daily_ODS_New.dbo.LoadStatus where TableName = \'AGR_ACTIVITYTOTAL\' AND LoadDate = @ProcessDate
 INSERT INTO XP2_Daily_ODS_new.dbo.LoadStatus (TableName, LoadDate, Status)
 VALUES (\'AGR_ACTIVITYTOTAL\', @ProcessDate, \'%loadVar3%\')''' Timeout: 30 Result=> QueryResult3
-    Database.Close Connection: SQLConnection
-    Variables.DecreaseVariable Value: TextAsNumber DecrementValue: 1
-END
-Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
-# UPDATE FILE DATE
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''
+        Database.Close Connection: SQLConnection
+        Variables.DecreaseVariable Value: TextAsNumber DecrementValue: 1
+    END
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+    # UPDATE FILE DATE
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''
 DROP TABLE IF EXISTS #temp1
 SELECT * INTO #temp1 FROM (
 
@@ -364,8 +366,8 @@ FROM #temp1 WHERE rownum = @nextRow
 
 	SET @NextRow = @NextRow + 1
 END''' Timeout: 30 Result=> QueryResult2
-# UPDATE Dim Batch Process
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE dw1.dbo.Dim_BatchProcess
+    # UPDATE Dim Batch Process
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE dw1.dbo.Dim_BatchProcess
 
 SELECT *, FileDate = CAST(DATEADD(HOUR,-6, b.XPTIMESTAMP) AS DATE) INTO dw1.dbo.Dim_BatchProcess FROM (
 SELECT xptimestamp, ROW_NUMBER() OVER (PARTITION BY CAST(xptimestamp AS DATE) ORDER BY xptimestamp DESC) rownum 
@@ -378,9 +380,9 @@ SELECT * FROM XP2_Daily_ODS_New.DB2INST1.BATCHPROCESS
 )b WHERE rownum = 1
 ORDER BY b.XPTIMESTAMP
 ''' Timeout: 30 Result=> QueryResult2
-/# UPDATE Dim_MemberNumber
+    /# UPDATE Dim_MemberNumber
 #/
-@@copilotGeneratedAction: 'False'
+    @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #FirstOpen
 SELECT * INTO #FirstOpen FROM (
 SELECT MEMBER_NBR, OPEN_DATE, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY OPEN_DATE ASC) rownum FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIP)a WHERE a.rownum = 1
@@ -402,8 +404,8 @@ SELECT * INTO DW1.dbo.Dim_MemberNumber FROM (
 SELECT a.*,b.OPEN_DATE [FirstOpenDate],c.OPEN_DATE [LastOpened Date] FROM #membership a
 LEFT JOIN #FirstOpen b ON a.MEMBER_NBR = b.MEMBER_NBR
 LEFT JOIN #LastOpen c on a.Member_NBR = c.MEMBER_NBR)a''' Timeout: 900 Result=> QueryResult
-# UPDATE SSN_ID
-@@copilotGeneratedAction: 'False'
+    # UPDATE SSN_ID
+    @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #tin
 
 SELECT z.TIN INTO #TIN FROM (
@@ -418,8 +420,8 @@ INSERT INTO ReferenceTables.dbo.SSN_ID
 SELECT TIN FROM XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL WHERE TIN IS NOT NULL AND CONVERT(VARCHAR,TIN) NOT IN (SELECT CONVERT(VARCHAR,TIN) FROM #TIN)
 group BY tin
 ORDER BY TIN''' Timeout: 900 Result=> QueryResult
-# UPDATE DIM_ORIG_LOAN_TYPE
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS DW1.dbo.Dim_Orig_Loan_Type
+    # UPDATE DIM_ORIG_LOAN_TYPE
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS DW1.dbo.Dim_Orig_Loan_Type
 
 SELECT 
        a.MEMBER_NBR,
@@ -438,8 +440,8 @@ FROM
  
 ) a
 WHERE a.rownum = 1 ;''' Timeout: 900 Result=> QueryResult
-# Updated timestamp Individual Membership
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #IMDates
+    # Updated timestamp Individual Membership
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #IMDates
 
 SELECT * INTO #IMDates FROM (
 
@@ -540,7 +542,7 @@ SELECT
 , a.TIN
 ,a.BIRTH_DATE
 
-,COALESCE(a.BRANCH_NBR,c.BRANCH,c.OPEN_BRANCH_NBR) [BRANCH_NBR]
+,COALESCE(c.BRANCH,c.OPEN_BRANCH_NBR) [BRANCH_NBR,a.BRANCH_NBR]
 , ROW_NUMBER() OVER (PARTITION BY a.INDIVIDUAL_ID, b.MEMBER_NBR, a.TIN ORDER BY a.XPTIMESTAMP ASC) rownum
 --, CAST(DATEADD(HOUR,-6,a.XPTIMESTAMP) AS DATE) XPTIMESTAMP 
 FROM #tempIndividual a
@@ -552,11 +554,11 @@ WHERE b.MEMBER_NBR IS NOT NULL --AND b.MEMBER_NBR = 5702
 
 	SET @Maxrownum = @Maxrownum - 1
 END''' Timeout: 3000 Result=> QueryResult5
-SET MessageToLog TO $'''Starting Fact History Individual Load'''
-CALL LogProgress
-/# LOAD FACT HISTORY INDIVIDUAL
+    SET MessageToLog TO $'''Starting Fact History Individual Load'''
+    CALL LogProgress
+    /# LOAD FACT HISTORY INDIVIDUAL
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #IndividualDates
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #IndividualDates
 
 SELECT * INTO #IndividualDates FROM (
 
@@ -618,16 +620,16 @@ WHERE CAST(DATEADD(HOUR,-6,a.XPTIMESTAMP) AS DATE) <= @asofdate
 SET @incvar = @incvar + 1
 
 END''' Timeout: 600 Result=> QueryResult6
-SET MessageToLog TO $'''Completed Fact History Individual Load'''
-CALL LogProgress
-/# LOAD FACT MEMBER STATUS
+    SET MessageToLog TO $'''Completed Fact History Individual Load'''
+    CALL LogProgress
+    /# LOAD FACT MEMBER STATUS
 #/
-DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''SELECT 
+    DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''SELECT 
 COUNT(DISTINCT [ASOFDATE]) [DateCount]
       
   FROM [ReferenceTables].[dbo].[Dim_FileDate] WHERE CAST(ASOFDATE AS DATE) >= \'2024-10-31\' AND CAST(ASOFDATE as DATE) NOT IN  (SELECT CAST(asofdate AS DATE) FROM dw1.dbo.Fact_History_Member_Status)
 ''' Timeout: 800 Result=> QueryResult7
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #MemberStatusDates
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #MemberStatusDates
 
 SELECT * INTO #MemberStatusDates FROM (
 
@@ -747,8 +749,8 @@ LEFT JOIN ReferenceTables.dbo.[930 MEMBER BRANCH] d ON a.MEMBER_NBR = d.MEMBER_N
 SET @currentrow = @currentrow + 1
 
 END''' Timeout: 600 Result=> QueryResult6
-# LOAD FACT HISTORY LOAN STATUS
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #LoanStatusDates
+    # LOAD FACT HISTORY LOAN STATUS
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #LoanStatusDates
 
 SELECT * INTO #LoanStatusDates FROM (
 
@@ -887,8 +889,8 @@ WHERE a.rownum = 1
 
 	SET @Maxrownum = @Maxrownum - 1
 END''' Timeout: 900 Result=> QueryResult
-# UPDATE timestamp_Loans
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @MaxDate DATE = (SELECT ISNULL(MAX(asofdate),\'2017-01-01\') FROM DW1.dbo.timestamp_Loan)
+    # UPDATE timestamp_Loans
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @MaxDate DATE = (SELECT ISNULL(MAX(asofdate),\'2017-01-01\') FROM DW1.dbo.timestamp_Loan)
 DECLARE @currentDate DATE = DATEADD(dd,-1,GETDATE())
 
 
@@ -916,8 +918,8 @@ WHILE @LOOPVAR >= 0
 	
 	SET @LOOPVAR = @LOOPVAR - 1
 	END''' Timeout: 900 Result=> QueryResult
-# Update Fact_History_Share_Status
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #ShareStatusDates
+    # Update Fact_History_Share_Status
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #ShareStatusDates
 
 SELECT * INTO #ShareStatusDates FROM (
 
@@ -1061,8 +1063,8 @@ WHERE a.rownum = 1
 
 	SET @Maxrownum = @Maxrownum - 1
 END''' Timeout: 400 Result=> QueryResult5
-# UPDATE Delinquency Report Data
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+    # UPDATE Delinquency Report Data
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
 
 --PRINT DATEDIFF(dd,\'2024-11-30\', GETDATE())
 
@@ -1314,8 +1316,8 @@ LEFT JOIN #lastcreditscore lcs ON app.APLNUM = lcs.APLNUM
 WHERE a.ProcessDate = @ASOFDATE AND d.LOAN_TYPE <> 98 AND ISNULL(d.WOFF_AMOUNT,0) = 0 AND (ISNULL(d.closed,0) = 0) 
 
 ORDER BY a.MEMBER_NBR''' Timeout: 900 Result=> QueryResult
-# UPDATE ADD SSN FROM OFF-SYSTEM DATA
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp2
+    # UPDATE ADD SSN FROM OFF-SYSTEM DATA
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp2
 SELECT * INTO #temp2 FROM (
 SELECT TIN FROM ReferenceTables.dbo.SSN_ID)a
 
@@ -1343,9 +1345,9 @@ SELECT CIF_SOCIAL_SECURITY FROM Off_System_ODS.dbo.Staging_Credit_Cards
 GROUP BY CIF_SOCIAL_SECURITY
 
 )a WHERE TIN NOT IN (SELECT tin FROM #temp2)''' Timeout: 120 Result=> QueryResult4
-/# LOAD FACT MEMBER STATUS
+    /# LOAD FACT MEMBER STATUS
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #MemberStatusDates
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #MemberStatusDates
 
 SELECT * INTO #MemberStatusDates FROM (
 
@@ -1469,9 +1471,9 @@ LEFT JOIN ReferenceTables.dbo.[930 MEMBER BRANCH] d ON a.MEMBER_NBR = d.MEMBER_N
 
 SET @currentrow = @currentrow + 1
 END''' Timeout: 600 Result=> QueryResult6
-/# Update view_Deposit_Dashboard
+    /# Update view_Deposit_Dashboard
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #DepositDates
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #DepositDates
 
 SELECT * INTO #DepositDates FROM (
 
@@ -1790,9 +1792,9 @@ SELECT
     SET @Maxrownum = @Maxrownum - 1;
 END;
 ''' Timeout: 5000 Result=> QueryResult5
-/# Update view_Loan_Dashboard
+    /# Update view_Loan_Dashboard
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #LoanDates
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #LoanDates
 
 SELECT * INTO #LoanDates FROM (
 
@@ -2035,9 +2037,9 @@ SELECT distinct
 END;
   
 ''' Timeout: 600 Result=> QueryResult5
-/# Update view_Membership_Dashboard
+    /# Update view_Membership_Dashboard
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #MemberDates
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #MemberDates
 
 SELECT * INTO #MemberDates FROM (
 
@@ -2203,19 +2205,19 @@ SELECT DISTINCT
 
     SET @Maxrownum = @Maxrownum - 1;
 END;''' Timeout: 600 Result=> QueryResult5
-Database.Close Connection: SQLConnection
-DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
-Text.ConvertDateTimeToText.FromCustomDateTime DateTime: CurrentDateTime CustomFormat: $'''dd''' Result=> Dayofmonth
-Text.ToNumber Text: Dayofmonth Number=> TextAsNumber3
-# The next three steps can be enabled if this flow must be run manually and you would like the full load flow to execute when the express flow is completed
-DISABLE SET MessageToLog TO $'''Completed Express Table Load. Starting Full load flow.'''
-DISABLE CALL LogProgress
-@@flowname: '04 Extract XP2 Full Load - Daily'
+    Database.Close Connection: SQLConnection
+    DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
+    Text.ConvertDateTimeToText.FromCustomDateTime DateTime: CurrentDateTime CustomFormat: $'''dd''' Result=> Dayofmonth
+    Text.ToNumber Text: Dayofmonth Number=> TextAsNumber3
+    # The next three steps can be enabled if this flow must be run manually and you would like the full load flow to execute when the express flow is completed
+    DISABLE SET MessageToLog TO $'''Completed Express Table Load. Starting Full load flow.'''
+    DISABLE CALL LogProgress
+    @@flowname: '04 Extract XP2 Full Load - Daily'
 DISABLE External.RunFlow FlowId: '26753e10-cac4-ef11-b8e8-7c1e524618dd' WaitToComplete: True
-IF TextAsNumber3 <= 3 THEN
-    SET MessageToLog TO $'''If first three days of the month, run Month End Express Load - Currently Disabled'''
-    CALL LogProgress
-    DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS db2inst1.account
+    IF TextAsNumber3 <= 3 THEN
+        SET MessageToLog TO $'''If first three days of the month, run Month End Express Load - Currently Disabled'''
+        CALL LogProgress
+        DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS db2inst1.account
 
 SELECT * INTO db2inst1.account FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.ACCOUNT\')
 
@@ -2347,15 +2349,16 @@ SELECT * INTO db2inst1.AGR_MEMBERTOTAL FROM OPENQUERY (DB2MONTHEND,\'SELECT * FR
 DROP TABLE IF EXISTS db2inst1.AGR_SHARERATE
 
 SELECT * INTO db2inst1.AGR_SHARERATE FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_SHARERATE\')''' Timeout: 30 Result=> QueryResult7
-    @@flowname: '02 Extract VE file'
+        @@flowname: '02 Extract VE file'
 DISABLE External.RunFlow FlowId: '852a13e9-f3ff-4e2c-ae77-d8b9b3b2a296' WaitToComplete: True
-    @@flowname: '05 Extract XP2 Express - MONTH END'
+        @@flowname: '05 Extract XP2 Express - MONTH END'
 DISABLE External.RunFlow FlowId: '21d411ad-f8c1-ef11-b8e8-7c1e524618dd' WaitToComplete: True
-ELSE IF TextAsNumber3 = 4 THEN
-    SET MessageToLog TO $'''If fourth day of the month - Run Month End Full Load - Currently Disabled'''
-    CALL LogProgress
-    @@flowname: '05 Extract XP2 Full Load - MONTH END'
+    ELSE IF TextAsNumber3 = 4 THEN
+        SET MessageToLog TO $'''If fourth day of the month - Run Month End Full Load - Currently Disabled'''
+        CALL LogProgress
+        @@flowname: '05 Extract XP2 Full Load - MONTH END'
 DISABLE External.RunFlow FlowId: 'bedfb968-dec3-ef11-b8e8-7c1e524618dd' WaitToComplete: True
-END
-SET MessageToLog TO $'''04 Extract EP2 DAILY Complete'''
-CALL LogProgress
+    END
+    SET MessageToLog TO $'''04 Extract EP2 DAILY Complete'''
+    CALL LogProgress
+END FUNCTION
