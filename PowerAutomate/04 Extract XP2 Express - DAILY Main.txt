@@ -415,10 +415,18 @@ FROM
 ) a
 WHERE a.rownum = 1 ;''' Timeout: 900 Result=> QueryResult
 # Updated timestamp Individual Membership
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp30
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #IMDates
+
+SELECT * INTO #IMDates FROM (
+
+SELECT DISTINCT Asofdate FROM dw1.dbo.timestamp_Individual_Membership
+
+)a
+
+DROP TABLE IF EXISTS #temp30
 SELECT * INTO #temp30 FROM (
 SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
-WHERE asofdate >=\'2024-10-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM DW1.dbo.timestamp_Individual_Membership GROUP BY Asofdate)
+WHERE asofdate >=\'2024-10-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM #IMDates GROUP BY Asofdate)
 GROUP BY ASOFDATE
 )a
 
@@ -519,9 +527,17 @@ SET MessageToLog TO $'''Starting Fact History Individual Load'''
 CALL LogProgress
 /# LOAD FACT HISTORY INDIVIDUAL
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #tempdate
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #IndividualDates
+
+SELECT * INTO #IndividualDates FROM (
+
+SELECT DISTINCT Asofdate FROM dw1.dbo.Fact_History_Individual
+
+)a
+
+DROP TABLE IF EXISTS #tempdate
 SELECT * INTO #tempdate FROM (
-SELECT *, ROW_NUMBER() OVER (ORDER BY ASOFDATE) rownum FROM ReferenceTables.dbo.Dim_FileDate WHERE ASOFDATE > (SELECT MAX(asofdate) FROM dw1.dbo.Fact_History_Individual)
+SELECT *, ROW_NUMBER() OVER (ORDER BY ASOFDATE) rownum FROM ReferenceTables.dbo.Dim_FileDate WHERE ASOFDATE > (SELECT MAX(asofdate) FROM #IndividualDates)
 ) a
 
 
@@ -577,7 +593,7 @@ SET MessageToLog TO $'''Completed Fact History Individual Load'''
 CALL LogProgress
 /# LOAD FACT MEMBER STATUS
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''SELECT 
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''SELECT 
 COUNT(DISTINCT [ASOFDATE]) [DateCount]
       
   FROM [ReferenceTables].[dbo].[Dim_FileDate] WHERE CAST(ASOFDATE AS DATE) >= \'2024-10-31\' AND CAST(ASOFDATE as DATE) NOT IN  (SELECT CAST(asofdate AS DATE) FROM dw1.dbo.Fact_History_Member_Status)
@@ -703,10 +719,18 @@ SET @currentrow = @currentrow + 1
 
 END''' Timeout: 600 Result=> QueryResult6
 # LOAD FACT HISTORY LOAN STATUS
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp3
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #LoanStatusDates
+
+SELECT * INTO #LoanStatusDates FROM (
+
+SELECT DISTINCT Asofdate FROM DW1.dbo.Fact_History_Loan_Status
+
+)a
+
+DROP TABLE IF EXISTS #temp3
 SELECT * INTO #temp3 FROM (
 SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
-WHERE asofdate >= \'2024-10-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM DW1.dbo.Fact_History_Loan_Status GROUP BY Asofdate)
+WHERE asofdate >= \'2024-10-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM #LoanStatusDates GROUP BY Asofdate)
 GROUP BY ASOFDATE
 )a
 
@@ -864,7 +888,16 @@ WHILE @LOOPVAR >= 0
 	SET @LOOPVAR = @LOOPVAR - 1
 	END''' Timeout: 900 Result=> QueryResult
 # Update Fact_History_Share_Status
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp3;
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #ShareStatusDates
+
+SELECT * INTO #ShareStatusDates FROM (
+
+SELECT DISTINCT Asofdate FROM dw1.dbo.Fact_History_Share_Status
+
+)a
+
+
+DROP TABLE IF EXISTS #temp3;
 SELECT *
 INTO #temp3
 FROM
@@ -872,7 +905,7 @@ FROM
     SELECT ASOFDATE,
            ROW_NUMBER() OVER (ORDER BY ASOFDATE DESC) rownum
     FROM ReferenceTables.dbo.Dim_FileDate
-    WHERE ASOFDATE >=\'2025-01-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM DW1.dbo.Fact_History_Share_Status GROUP BY Asofdate)
+    WHERE ASOFDATE >=\'2025-01-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM #ShareStatusDates GROUP BY Asofdate)
     GROUP BY ASOFDATE
 ) a;
 
@@ -1403,10 +1436,18 @@ SET @currentrow = @currentrow + 1
 END''' Timeout: 600 Result=> QueryResult6
 /# Update view_Deposit_Dashboard
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp10;
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #DepositDates
+
+SELECT * INTO #DepositDates FROM (
+
+SELECT DISTINCT AS_OF_DATE FROM DW1.dbo.view_Deposit_Dashboards
+
+)a
+
+DROP TABLE IF EXISTS #temp10;
 SELECT * INTO #temp10 FROM (
 SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
-WHERE asofdate >=\'2025-01-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM DW1.dbo.view_Deposit_Dashboards WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
+WHERE asofdate >=\'2025-01-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM #DepositDates WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
 GROUP BY ASOFDATE
 )a
 
@@ -1499,7 +1540,7 @@ DROP TABLE IF EXISTS #MEMBERINFO
 
 SELECT * INTO #MEMBERINFO FROM (
 
-SELECT Distinct * FROM dw1.dbo.Fact_History_Member_Status
+SELECT Distinct * FROM dw1.dbo.Fact_History_Member_Status WHERE ASOFDATE = @ProcessDate
 
 )a
 
@@ -1521,7 +1562,7 @@ DROP TABLE IF EXISTS #sharehistory
 
 SELECT * INTO #sharehistory FROM (
 
-SELECT * FROM DW1.dbo.Fact_History_Share_Status
+SELECT * FROM DW1.dbo.Fact_History_Share_Status WHERE ASOFDATE = @ProcessDate
 
 )a
 
@@ -1717,10 +1758,18 @@ END;
 ''' Timeout: 5000 Result=> QueryResult5
 /# Update view_Loan_Dashboard
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp11;
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #LoanDates
+
+SELECT * INTO #LoanDates FROM (
+
+SELECT DISTINCT AS_OF_DATE FROM DW1.dbo.view_Loan_Dashboards
+
+)a
+
+DROP TABLE IF EXISTS #temp11;
 SELECT * INTO #temp11 FROM (
 SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE DESC) rownum FROM ReferenceTables.dbo.Dim_FileDate
-WHERE asofdate >=\'2024-10-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM DW1.dbo.view_Loan_Dashboards WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
+WHERE asofdate >=\'2024-10-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM #LoanDates WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
 GROUP BY ASOFDATE
 )a
 
@@ -1812,7 +1861,7 @@ DROP TABLE IF EXISTS #loanhistory
 
 SELECT * INTO #loanhistory FROM (
 
-SELECT * FROM DW1.dbo.Fact_History_Loan_Status
+SELECT * FROM DW1.dbo.Fact_History_Loan_Status WHERE ASOFDATE = @ProcessDate
 
 )a
 
@@ -1951,10 +2000,18 @@ END;
 ''' Timeout: 600 Result=> QueryResult5
 /# Update view_Membership_Dashboard
 #/
-Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp12;
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #MemberDates
+
+SELECT * INTO #MemberDates FROM (
+
+SELECT DISTINCT AS_OF_DATE FROM DW1.dbo.view_MemberDashboard
+
+)a
+
+DROP TABLE IF EXISTS #temp12;
 SELECT * INTO #temp12 FROM (
 SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
-WHERE asofdate >= \'2024-10-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM DW1.dbo.view_MemberDashboard WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
+WHERE asofdate >= \'2024-10-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM #MemberDates WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
 GROUP BY ASOFDATE
 )a
 
@@ -2106,10 +2163,10 @@ Database.Close Connection: SQLConnection
 DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
 Text.ConvertDateTimeToText.FromCustomDateTime DateTime: CurrentDateTime CustomFormat: $'''dd''' Result=> Dayofmonth
 Text.ToNumber Text: Dayofmonth Number=> TextAsNumber3
-SET MessageToLog TO $'''Completed Express Table Load. Starting Full Load'''
-CALL LogProgress
+DISABLE SET MessageToLog TO $'''Completed Express Table Load. Starting Full load flow.'''
+DISABLE CALL LogProgress
 @@flowname: '04 Extract XP2 Full Load - Daily'
-External.RunFlow FlowId: '26753e10-cac4-ef11-b8e8-7c1e524618dd' WaitToComplete: True
+DISABLE External.RunFlow FlowId: '26753e10-cac4-ef11-b8e8-7c1e524618dd' WaitToComplete: True
 IF TextAsNumber3 <= 3 THEN
     SET MessageToLog TO $'''If first three days of the month, run Month End Express Load - Currently Disabled'''
     CALL LogProgress
