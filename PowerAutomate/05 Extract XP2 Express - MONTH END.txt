@@ -82,14 +82,15 @@ DECLARE @SQL2 Varchar(max)
 DECLARE @MaxTSYear VARCHAR(MAX)
 DECLARE @MaxTSMonth VARCHAR(MAX)
 DECLARE @MaxTSDay VARCHAR(MAX)
+DECLARE @ProcessDate date = EOMONTH(GETDATE(),-2)
 
 while @myVar >= %TextAsNumber%
 Begin
 Set @TableName = (select TableName from #tables where rownum = @myVar)
 --Print @tableName
-Set @MaxTSYEar = (SELECT CAST(YEAR(MAX(XPTIMESTAMP)) AS VARCHAR) FROM DB2Inst1.%currentTableName%)
-Set @MaxTSMonth = CAST(FORMAT((SELECT Month(MAX(XPTIMESTAMP))  FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
-SET @MaxTSDay = CAST(FORMAT((SELECT Day(MAX(XPTIMESTAMP)) FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+Set @MaxTSYEar = YEAR(@ProcessDate)--(SELECT CAST(YEAR(MAX(XPTIMESTAMP)) AS VARCHAR) FROM DB2Inst1.%currentTableName%)
+Set @MaxTSMonth = MONTH(@ProcessDate) --CAST(FORMAT((SELECT Month(MAX(XPTIMESTAMP))  FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+SET @MaxTSDay = DAY(@ProcessDate) -- CAST(FORMAT((SELECT Day(MAX(XPTIMESTAMP)) FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
 --PRINT @MaxTSYear
 --PRINT @MaxTSMonth
 --PRINT @MaxTSDay
@@ -97,7 +98,7 @@ SET @MaxTSDay = CAST(FORMAT((SELECT Day(MAX(XPTIMESTAMP)) FROM DB2Inst1.%current
 SET @SQL = \'
 DROP TABLE IF EXISTS #temp1
 DELETE FROM DB2Inst1.\' + @TableName + \' WHERE Cast(XPTIMESTAMP as date) > \'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'
-SELECT * INTO #temp1 FROM OPENQUERY (DB2MONTHEND,\'\'SELECT * FROM DB2INST1.\' + @TableName + \' WHERE XPTIMESTAMP > \'\'\'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'\'\' \'\' )
+SELECT * INTO #temp1 FROM OPENQUERY (DB2MONTHEND,\'\'SELECT * FROM DB2INST1.\' + @TableName + \' WHERE XPTIMESTAMP - 6 HOURS > \'\'\'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'\'\' \'\' )
 Insert into db2inst1.\' + @TableName + \' 
 SELECT * FROM #temp1
 \'
