@@ -1,8 +1,35 @@
 
 FUNCTION LogProgress GLOBAL
+    System.GetEnvironmentVariable.GetEnvironmentVariable Name: $'''COMPUTERNAME''' Value=> ComputerName
+    DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
+    SET LogLevel TO $'''Info'''
+    SET CloseConnection TO $'''False'''
+    IF IsEmpty(SQLConnection) THEN
+        Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=DW1;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+        SET CloseConnection TO $'''True'''
+    END
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE DW1
+
+INSERT INTO FlowLogs (
+    FlowName,
+    ComputerName,
+    EventTime,
+    LogMessage,
+    LogLevel
+)
+VALUES (\'%FlowName%\',
+    \'%ComputerName%\',
+    \'%CurrentDateTime%\',
+    \'%MessageToLog%\',
+    \'%LogLevel%\'
+);''' Timeout: 600 Result=> ExpressTables
+    IF CloseConnection = $'''True''' THEN
+        Database.Close Connection: SQLConnection
+    END
     IF (Folder.IfFolderExists.Exists Path: $'''C:\\PowerAutomate\\Logs''') THEN
-        System.GetEnvironmentVariable.GetEnvironmentVariable Name: $'''COMPUTERNAME''' Value=> ComputerName
-        DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
         File.WriteText File: $'''C:\\PowerAutomate\\Logs\\%FlowName%_Log.txt''' TextToWrite: $'''%ComputerName% - %CurrentDateTime% - %MessageToLog%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.Unicode
+        ON ERROR
+
+        END
     END
 END FUNCTION

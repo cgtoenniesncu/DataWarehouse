@@ -3,6 +3,8 @@ SET MessageToLog TO $'''Starting Flow'''
 CALL LogProgress
 # OPEN SQL CONNECTION TO NCURPT2
 Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+SET MessageToLog TO $'''Continue Flow'''
+CALL LogProgress
 # FIND TABLE EXPRESS TABLES WITH TIMESTAMP
 @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
