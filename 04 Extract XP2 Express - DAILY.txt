@@ -1,0 +1,2671 @@
+# OPEN SQL CONNECTION TO NCURPT2
+Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+# FIND TABLE EXPRESS TABLES WITH TIMESTAMP
+@@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
+
+Select * FROM XP2_Express_Tables where HasTimestamp = 1 and tablename <> \'AGR_ACTIVITYTOTAL\'''' Timeout: 600 Result=> ExpressTables
+Database.Close Connection: SQLConnection
+# SET VARIABLE EQUAL TO NUMBER OF TABLES W TIMESTAMPS
+SET NewVar TO ExpressTables.RowsCount
+Text.ToNumber Text: NewVar Number=> TextAsNumber
+# LOAD TABLES WITH TIMESTAMP INTO ODS
+LOOP WHILE (TextAsNumber) > (0)
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_Express_Tables WHERE HasTimeStamp = 1
+	)a WHERE a.rownum = %TextAsNumber%
+
+''' Timeout: 600 Result=> tablename
+    LOOP FOREACH CurrentItem IN tablename
+        SET currentTableName TO CurrentItem['TableName']
+        SET currentSchemaName TO CurrentItem['Schema']
+    END
+    SET loadVar TO $'''Complete'''
+    # DEPRECATED STEP
+    @@copilotGeneratedAction: 'False'
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum into #tables FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_Express_Tables WHERE HasTimeStamp = 1
+	)a WHERE a.rownum = %TextAsNumber%
+
+Declare @myvar int =%TextAsNumber% -- (select Count(TableName) from #tables)
+Declare @TableName varchar(100) 
+DECLARE @SQL Varchar(max)
+DECLARE @SQL2 Varchar(max)
+DECLARE @MaxTSYear VARCHAR(MAX)
+DECLARE @MaxTSMonth VARCHAR(MAX)
+DECLARE @MaxTSDay VARCHAR(MAX)
+
+while @myVar >= %TextAsNumber%
+Begin
+Set @TableName = (select TableName from #tables where rownum = @myVar)
+--Print @tableName
+Set @MaxTSYEar = (SELECT CAST(YEAR(MAX(XPTIMESTAMP)) AS VARCHAR) FROM DB2Inst1.%currentTableName%)
+Set @MaxTSMonth = CAST(FORMAT((SELECT Month(MAX(XPTIMESTAMP))  FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+SET @MaxTSDay = CAST(FORMAT((SELECT Day(MAX(XPTIMESTAMP)) FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+--PRINT @MaxTSYear
+--PRINT @MaxTSMonth
+--PRINT @MaxTSDay
+
+SET @SQL = \'
+DROP TABLE IF EXISTS #temp1
+DELETE FROM DB2Inst1.\' + @TableName + \' WHERE Cast(DateAdd(hh,-6,Cast(XPTIMESTAMP as datetime)) as date) > \'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'
+SELECT * INTO #temp1 FROM OPENQUERY (DB2DAILY,\'\'SELECT * FROM DB2INST1.\' + @TableName + \' WHERE ADD_HOURS(XPTIMESTAMP,-6) > \'\'\'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'\'\' \'\' )
+Insert into db2inst1.\' + @TableName + \' 
+SELECT * FROM #temp1
+\'
+EXEC(@SQL)
+Set @myVar = @myVar - 1
+End''' Timeout: 900 Result=> QueryResult
+ON ERROR SqlStatementError
+    SET loadVar TO $'''Failed'''
+END
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum into #tables FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_Express_Tables WHERE HasTimeStamp = 1
+	)a WHERE a.rownum = %TextAsNumber%
+
+Declare @myvar int =%TextAsNumber% -- (select Count(TableName) from #tables)
+Declare @TableName varchar(100) 
+DECLARE @SQL Varchar(max)
+DECLARE @SQL2 Varchar(max)
+DECLARE @MaxTSYear VARCHAR(MAX)
+DECLARE @MaxTSMonth VARCHAR(MAX)
+DECLARE @MaxTSDay VARCHAR(MAX)
+
+while @myVar >= %TextAsNumber%
+Begin
+Set @TableName = (select TableName from #tables where rownum = @myVar)
+--Print @tableName
+Set @MaxTSYEar = (SELECT CAST(YEAR(MAX(XPTIMESTAMP)) AS VARCHAR) FROM DB2Inst1.%currentTableName%)
+Set @MaxTSMonth = CAST(FORMAT((SELECT Month(MAX(XPTIMESTAMP))  FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+SET @MaxTSDay = CAST(FORMAT((SELECT Day(MAX(XPTIMESTAMP)) FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+--PRINT @MaxTSYear
+--PRINT @MaxTSMonth
+--PRINT @MaxTSDay
+
+SET @SQL = \'
+DROP TABLE IF EXISTS #temp1
+DELETE FROM DB2Inst1.\' + @TableName + \' WHERE Cast(XPTIMESTAMP as date) > \'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'
+SELECT * INTO #temp1 FROM OPENQUERY (DB2DAILY,\'\'SELECT * FROM DB2INST1.\' + @TableName + \' WHERE XPTIMESTAMP > \'\'\'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'\'\' \'\' )
+Insert into db2inst1.\' + @TableName + \' 
+SELECT * FROM #temp1
+\'
+EXEC(@SQL)
+Set @myVar = @myVar - 1
+End''' Timeout: 900 Result=> QueryResult
+    ON ERROR SqlStatementError
+        SET loadVar TO $'''Failed'''
+    END
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GetDate())
+
+
+DELETE FROM XP2_Daily_ODS_New.dbo.LoadStatus where TableName = \'%currentTableName%\' AND LoadDate = @ProcessDate
+INSERT INTO XP2_Daily_ODS_new.dbo.LoadStatus (TableName, LoadDate, Status)
+VALUES (\'%currentTableName%\', @ProcessDate, \'%loadVar%\')''' Timeout: 30 Result=> QueryResult3
+    Database.Close Connection: SQLConnection
+    Variables.DecreaseVariable Value: TextAsNumber DecrementValue: 1
+END
+# OPEN DATABASE CONNECTION
+Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+# FIND EXPRESS TABLES WITHOUT TIMESTAMP
+@@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
+
+Select * FROM XP2_Express_Tables where HasTimestamp = 0 and tablename <> \'AGR_ACTIVITYTOTAL\'''' Timeout: 600 Result=> ExpressTables2
+Database.Close Connection: SQLConnection
+SET NewVar2 TO ExpressTables2.RowsCount
+Text.ToNumber Text: NewVar2 Number=> TextAsNumber2
+# LOAD TABLES WITHOUT TIMESTAMPS INTO ODS USING CURRENT DATE AT THE TIMESTAMP
+LOOP WHILE (TextAsNumber2) > (0)
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_Express_Tables WHERE HasTimeStamp = 0 and tablename <> \'AGR_ACTIVITYTOTAL\' 
+	)a WHERE a.rownum = %TextAsNumber2%
+
+''' Timeout: 600 Result=> tablename2
+    LOOP FOREACH CurrentItem IN tablename2
+        SET currentTableName2 TO CurrentItem['TableName']
+        SET currentSchemaName2 TO CurrentItem['Schema']
+    END
+    SET loadVar2 TO $'''Complete'''
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum into #tables FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_Express_Tables WHERE HasTimeStamp = 0 AND tablename <> \'AGR_ACTIVITYTOTAL\'
+	)a WHERE a.rownum = %TextAsNumber2%
+
+Declare @myvar int =%TextAsNumber2% -- (select Count(TableName) from #tables)
+Declare @TableName varchar(100) 
+DECLARE @SQL Varchar(max)
+DECLARE @SQL2 Varchar(max)
+DECLARE @ProcessDate Varchar(max)
+
+
+while @myVar >= %TextAsNumber2%
+Begin
+Set @TableName = (select TableName from #tables where rownum = @myVar)
+--Print @tableName
+Set @ProcessDate = Cast(DateAdd(dd,-1,GetDate()) as varchar)
+
+
+
+SET @SQL = \'
+DROP TABLE IF EXISTS #temp1
+DELETE FROM DB2Inst1.\' + @TableName + \' WHERE cast(processdate as varchar) =  \'\'\' + @ProcessDate  + \'\'\'
+SELECT *, \'\'\' + @Processdate+ \'\'\' [ProcessDate] INTO #temp1 FROM OPENQUERY (DB2DAILY,\'\'SELECT * FROM DB2INST1.\' + @TableName + \' \'\' )
+Insert into db2inst1.\' + @TableName + \' 
+SELECT * FROM #temp1
+\'
+EXEC(@SQL)
+Set @myVar = @myVar - 1
+End''' Timeout: 900 Result=> QueryResult
+    ON ERROR SqlStatementError
+        SET loadVar2 TO $'''Failed'''
+    END
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GetDate())
+
+
+DELETE FROM XP2_Daily_ODS_New.dbo.LoadStatus where TableName = \'%currentTableName2%\' AND LoadDate = @ProcessDate
+INSERT INTO XP2_Daily_ODS_new.dbo.LoadStatus (TableName, LoadDate, Status)
+VALUES (\'%currentTableName2%\', @ProcessDate, \'%loadVar2%\')''' Timeout: 30 Result=> QueryResult3
+    Database.Close Connection: SQLConnection
+    Variables.DecreaseVariable Value: TextAsNumber2 DecrementValue: 1
+END
+Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+# FIND AGR_ACTIVITY Table
+@@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
+
+Select * FROM XP2_Express_Tables where tablename = \'AGR_ACTIVITYTOTAL\'''' Timeout: 600 Result=> ExpressTables3
+Database.Close Connection: SQLConnection
+# SET VARIABLE EQUAL TO NUMBER TABLES FOUND
+SET NewVar TO ExpressTables3.RowsCount
+Text.ToNumber Text: NewVar Number=> TextAsNumber
+# LOAD AGR_ACTIVITYTOTALS TABLE INTO ODS
+LOOP WHILE (TextAsNumber) > (0)
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_Express_Tables WHERE tablename = \'AGR_ACTIVITYTOTAL\'
+	)a WHERE a.rownum = %TextAsNumber%
+
+''' Timeout: 600 Result=> tablename
+    LOOP FOREACH CurrentItem IN tablename
+        SET currentTableName TO CurrentItem['TableName']
+        SET currentSchemaName TO CurrentItem['Schema']
+    END
+    SET loadVar3 TO $'''Complete'''
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum into #tables FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_Express_Tables WHERE tablename = \'AGR_ACTIVITYTOTAL\'
+	)a WHERE a.rownum = %TextAsNumber%
+
+Declare @myvar int =%TextAsNumber% -- (select Count(TableName) from #tables)
+Declare @TableName varchar(100) 
+DECLARE @SQL Varchar(max)
+DECLARE @SQL2 Varchar(max)
+DECLARE @MaxTSYear VARCHAR(MAX)
+DECLARE @MaxTSMonth VARCHAR(MAX)
+DECLARE @MaxTSDay VARCHAR(MAX)
+
+while @myVar >= %TextAsNumber%
+Begin
+Set @TableName = (select TableName from #tables where rownum = @myVar)
+--Print @tableName
+Set @MaxTSYEar = (SELECT CAST(YEAR(MAX(AS_OF_DATE)) AS VARCHAR) FROM DB2Inst1.%currentTableName%)
+Set @MaxTSMonth = CAST(FORMAT((SELECT Month(MAX(AS_OF_DATE))  FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+SET @MaxTSDay = CAST(FORMAT((SELECT Day(MAX(AS_OF_DATE)) FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+--PRINT @MaxTSYear
+--PRINT @MaxTSMonth
+--PRINT @MaxTSDay
+
+SET @SQL = \'
+DROP TABLE IF EXISTS #temp1
+DELETE FROM DB2Inst1.\' + @TableName + \' WHERE Cast(AS_OF_DATE as date) > \'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'
+SELECT * INTO #temp1 FROM OPENQUERY (DB2DAILY,\'\'SELECT * FROM DB2INST1.\' + @TableName + \' WHERE AS_OF_DATE > \'\'\'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'\'\' \'\' )
+Insert into db2inst1.\' + @TableName + \' 
+SELECT * FROM #temp1
+\'
+EXEC(@SQL)
+Set @myVar = @myVar - 1
+End''' Timeout: 900 Result=> QueryResult
+    ON ERROR SqlStatementError
+        SET loadVar3 TO $'''Failed'''
+    END
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GetDate())
+
+
+DELETE FROM XP2_Daily_ODS_New.dbo.LoadStatus where TableName = \'AGR_ACTIVITYTOTAL\' AND LoadDate = @ProcessDate
+INSERT INTO XP2_Daily_ODS_new.dbo.LoadStatus (TableName, LoadDate, Status)
+VALUES (\'AGR_ACTIVITYTOTAL\', @ProcessDate, \'%loadVar3%\')''' Timeout: 30 Result=> QueryResult3
+    Database.Close Connection: SQLConnection
+    Variables.DecreaseVariable Value: TextAsNumber DecrementValue: 1
+END
+Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+# UPDATE FILE DATE
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''
+DROP TABLE IF EXISTS #temp1
+SELECT * INTO #temp1 FROM (
+
+SELECT ProcessDate, ROW_NUMBER() OVER (ORDER BY ProcessDate )rownum FROM XP2_Daily_ODS_New.DB2INST1.AGR_LOANDELQ
+WHERE ProcessDate NOT IN (SELECT asofdate FROM ReferenceTables.dbo.dim_FileDate)
+GROUP BY ProcessDate
+
+)a
+
+DECLARE @Maxrownum INT = (SELECT MAX(rownum) FROM #temp1 )
+
+DECLARE @NextRow INT = 1
+
+WHILE @NextRow <= @Maxrownum
+	BEGIN 
+	DELETE FROM ReferenceTables.dbo.DIM_FILEDATE WHERE ASOFDATE = (SELECT ProcessDate FROM #temp1 WHERE rownum = @NextRow)
+	
+	
+	INSERT INTO ReferenceTables.dbo.DIM_FILEDATE
+
+	SELECT 
+
+	CAST(ProcessDate AS DATE) 
+,CAST(DATEADD(dd,-1,ProcessDate) AS DATE) 
+,EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0) 
+,EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-1) 
+, CASE
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 1 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),2)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 2 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),1)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 3 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 4 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),2)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 5 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),1)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 6 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 7 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),2)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 8 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),1)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 9 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 10 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),2)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 11 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),1)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 12 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0)
+END 
+, CASE
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 1 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-1)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 2 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-2)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 3 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-3)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 4 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-1)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 5 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-2)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 6 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-3)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 7 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-1)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 8 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-2)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 9 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-3)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 10 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-1)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 11 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-2)
+	WHEN MONTH(EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),0))= 12 THEN EOMONTH(CAST(DATEADD(dd,-1,ProcessDate) AS DATE),-3)
+END
+
+,EOMONTH(ProcessDate,12-MONTH(ProcessDate))
+,EOMONTH(ProcessDate,-MONTH(ProcessDate))
+
+
+FROM #temp1 WHERE rownum = @nextRow
+
+	SET @NextRow = @NextRow + 1
+END''' Timeout: 30 Result=> QueryResult2
+# UPDATE Dim Batch Process
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE dw1.dbo.Dim_BatchProcess
+
+SELECT *, FileDate = CAST(DATEADD(HOUR,-6, b.XPTIMESTAMP) AS DATE) INTO dw1.dbo.Dim_BatchProcess FROM (
+SELECT xptimestamp, ROW_NUMBER() OVER (PARTITION BY CAST(xptimestamp AS DATE) ORDER BY xptimestamp DESC) rownum 
+
+FROM (
+SELECT * FROM XP2_MonthEnd_ODS.DB2INST1.BATCHPROCESS 
+UNION
+SELECT * FROM XP2_Daily_ODS_New.DB2INST1.BATCHPROCESS
+)a 
+)b WHERE rownum = 1
+ORDER BY b.XPTIMESTAMP
+''' Timeout: 30 Result=> QueryResult2
+/# UPDATE Dim_MemberNumber
+#/
+@@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #FirstOpen
+SELECT * INTO #FirstOpen FROM (
+SELECT MEMBER_NBR, OPEN_DATE, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY OPEN_DATE ASC) rownum FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIP)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #LastOpen
+SELECT * INTO #LastOpen FROM (
+SELECT MEMBER_NBR, OPEN_DATE, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY OPEN_DATE DESC) rownum FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIP)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #membership
+SELECT * INTO #membership FROM (
+SELECT MEMBER_NBR FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIP GROUP BY MEMBER_NBR)a
+
+
+
+DROP TABLE IF EXISTS dw1.dbo.Dim_MemberNumber
+
+SELECT * INTO DW1.dbo.Dim_MemberNumber FROM (
+
+SELECT a.*,b.OPEN_DATE [FirstOpenDate],c.OPEN_DATE [LastOpened Date] FROM #membership a
+LEFT JOIN #FirstOpen b ON a.MEMBER_NBR = b.MEMBER_NBR
+LEFT JOIN #LastOpen c on a.Member_NBR = c.MEMBER_NBR)a''' Timeout: 900 Result=> QueryResult
+# UPDATE SSN_ID
+@@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #tin
+
+SELECT z.TIN INTO #TIN FROM (
+SELECT * FROM ReferenceTables.dbo.SSN_ID
+)z
+
+INSERT INTO ReferenceTables.dbo.SSN_ID
+(
+    TIN
+)
+
+SELECT TIN FROM XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL WHERE TIN IS NOT NULL AND CONVERT(VARCHAR,TIN) NOT IN (SELECT CONVERT(VARCHAR,TIN) FROM #TIN)
+group BY tin
+ORDER BY TIN''' Timeout: 900 Result=> QueryResult
+# UPDATE DIM_ORIG_LOAN_TYPE
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS DW1.dbo.Dim_Orig_Loan_Type
+
+SELECT 
+       a.MEMBER_NBR,
+       a.LOAN_NBR,
+	   CASE 
+		WHEN a.WOFF_OLD_LOAN_TYPE IS NOT NULL THEN a.WOFF_OLD_LOAN_TYPE 
+		ELSE a.LOAN_TYPE END [ORIG_LOAN_TYPE],
+       a.OPEN_DATE [ORIG_OPEN_DATE],
+       a.XPTIMESTAMP
+INTO DW1.dbo.Dim_Orig_Loan_Type
+FROM
+(
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, LOAN_NBR, OPEN_DATE ORDER BY XPTIMESTAMP asc) rownum
+    FROM XP2_Daily_ODS_New.DB2INST1.LOAN
+ 
+) a
+WHERE a.rownum = 1 ;''' Timeout: 900 Result=> QueryResult
+# Updated timestamp Individual Membership
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp30
+SELECT * INTO #temp30 FROM (
+SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
+WHERE asofdate >=\'2024-10-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM DW1.dbo.timestamp_Individual_Membership GROUP BY Asofdate)
+GROUP BY ASOFDATE
+)a
+
+DECLARE @Maxrownum INT = (SELECT COUNT(asofdate) FROM #temp30)
+
+DECLARE @ProcessDate DATE
+
+DECLARE @LastRow INT = 1
+
+WHILE @Maxrownum >= @LastRow
+	BEGIN 
+	
+	SET @ProcessDate = 
+(
+    SELECT ASOFDATE FROM #temp30 WHERE rownum = @Maxrownum GROUP BY ASOFDATE
+);
+
+DROP TABLE IF EXISTS #tempIndividual
+
+SELECT * INTO #tempIndividual FROM (
+
+SELECT *, ROW_NUMBER() OVER (PARTITION BY individual_ID ORDER BY XPTIMESTAMP DESC) rownum FROM (
+
+SELECT * FROM XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+UNION
+SELECT * FROM XP2_MonthEnd_ODS.DB2INST1.INDIVIDUAL WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+
+)a
+
+)b WHERE b.rownum = 1
+
+
+
+DROP TABLE IF EXISTS #tempMEMBERSHIPPARTICIPANT
+
+SELECT * INTO #tempMEMBERSHIPPARTICIPANT FROM (
+SELECT 
+	INDIVIDUAL_ID, MEMBER_NBR, ROW_NUMBER() OVER (PARTITION BY individual_ID ORDER BY XPTIMESTAMP DESC) rownum
+
+FROM (
+
+SELECT INDIVIDUAL_ID, MEMBER_NBR, XPTIMESTAMP FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIPPARTICIPANT WHERE [INDEX] = 1 AND DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+UNION
+SELECT INDIVIDUAL_ID, MEMBER_NBR, XPTIMESTAMP FROM XP2_MonthEnd_ODS.DB2INST1.MEMBERSHIPPARTICIPANT  WHERE [INDEX] = 1 AND DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+
+)a
+
+)b WHERE b.rownum = 1
+
+DROP TABLE IF EXISTS #tempMEMBERSHIP
+
+SELECT * INTO #tempMEMBERSHIP FROM (
+
+SELECT 
+	MEMBER_NBR, a.BRANCH, a.OPEN_BRANCH_NBR, ROW_NUMBER() OVER (PARTITION BY a.MEMBER_NBR ORDER BY XPTIMESTAMP DESC) rownum
+
+FROM (
+
+SELECT MEMBER_NBR, BRANCH, OPEN_BRANCH_NBR, XPTIMESTAMP FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIP WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+UNION
+SELECT MEMBER_NBR, BRANCH, OPEN_BRANCH_NBR, XPTIMESTAMP FROM XP2_MonthEnd_ODS.DB2INST1.MEMBERSHIP WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+
+)a
+
+)b WHERE b.rownum = 1
+
+
+
+
+
+
+
+--DROP TABLE IF EXISTS DW1.dbo.timestamp_Individual_Membership
+
+--SELECT * INTO DW1.dbo.timestamp_Individual_Membership FROM (
+DELETE FROM DW1.dbo.timestamp_Individual_Membership WHERE [AsofDate] = @ProcessDate
+INSERT INTO DW1.dbo.timestamp_Individual_Membership
+SELECT  
+@processDate [AsofDate]
+,a.INDIVIDUAL_ID
+, b.MEMBER_NBR
+, a.XPTIMESTAMP
+, a.TIN
+,a.BIRTH_DATE
+,COALESCE(a.BRANCH_NBR,c.BRANCH,c.OPEN_BRANCH_NBR) [BRANCH_NBR]
+, ROW_NUMBER() OVER (PARTITION BY a.INDIVIDUAL_ID, b.MEMBER_NBR, a.TIN ORDER BY a.XPTIMESTAMP ASC) rownum
+--, CAST(DATEADD(HOUR,-6,a.XPTIMESTAMP) AS DATE) XPTIMESTAMP 
+FROM #tempIndividual a
+LEFT JOIN #tempMEMBERSHIPPARTICIPANT b ON a.INDIVIDUAL_ID = b.INDIVIDUAL_ID
+LEFT JOIN #tempMEMBERSHIP c ON b.MEMBER_NBR = c.MEMBER_NBR
+WHERE b.MEMBER_NBR IS NOT NULL
+
+--)a where rownum = 1
+
+	SET @Maxrownum = @Maxrownum - 1
+END''' Timeout: 600 Result=> QueryResult5
+/# LOAD FACT HISTORY INDIVIDUAL
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #tempdate
+SELECT * INTO #tempdate FROM (
+SELECT *, ROW_NUMBER() OVER (ORDER BY ASOFDATE) rownum FROM ReferenceTables.dbo.Dim_FileDate WHERE ASOFDATE > (SELECT MAX(asofdate) FROM dw1.dbo.Fact_History_Individual)
+) a
+
+
+DECLARE @incvar int = 1
+DECLARE @maxincvar INT = (SELECT MAX(rownum) FROM #tempdate)
+DECLARE @ASOFDATE DATE 
+
+WHILE @incvar <= @maxincvar
+	BEGIN
+
+		DROP TABLE IF EXISTS #individualmember
+		SELECT * INTO #individualmember FROM (
+		SELECT *
+		--, ROW_NUMBER() OVER (PARTITION BY Individual_ID, Member_Nbr ORDER BY xptimestamp DESC) rownum 
+		FROM dw1.dbo.timestamp_Individual_Membership
+		)a WHERE a.rownum = 1
+
+		SET @ASOFDATE = (SELECT Asofdate FROM #tempdate WHERE rownum = @incvar)
+		
+
+		--DROP TABLE IF EXISTS dw1.dbo.Fact_History_Individual
+		--SELECT * INTO dw1.dbo.Fact_History_Individual FROM (
+		DELETE FROM dw1.dbo.Fact_History_Individual WHERE asofdate = @asofdate
+		INSERT INTO dw1.dbo.Fact_History_Individual
+		SELECT DISTINCT
+        @asofdate [ASOFDATE]
+		,a.INDIVIDUAL_ID,
+       BIRTH_DATE,
+       GENDER,
+       [IS_MEMBER],
+       [IS_ACCT_OWNER],
+       [IS_CU_EMPLOYEE],
+       [D1NAME],
+       [FIRST_NAME],
+       [MIDDLE_NAME],
+       [LAST_NAME],
+       TIN,
+       --LAST_CONTACT_DATETIME,
+       MEMBERSHIP_DATETIME,
+       BRANCH_NBR
+	  
+
+FROM XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL a
+JOIN (SELECT Individual_ID, xptimestamp FROM #individualmember GROUP BY Individual_ID, xptimestamp) b ON a.INDIVIDUAL_ID = b.Individual_ID AND a.XPTIMESTAMP = b.XPTIMESTAMP
+WHERE CAST(DATEADD(HOUR,-6,a.XPTIMESTAMP) AS DATE) <= @asofdate
+
+--)a
+
+SET @incvar = @incvar + 1
+
+END''' Timeout: 600 Result=> QueryResult6
+/# LOAD FACT MEMBER STATUS
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #filedate
+SELECT * INTO #filedate FROM (
+
+SELECT [ASOFDATE]
+      ,[PREVDATE]
+      ,[CURRMONTHEND]
+      ,[PREVMONTHEND]
+      ,[CURRQTREND]
+      ,[PREVQTREND]
+      ,[CURRYEND]
+      ,[PREVYEND]
+	 , ROW_NUMBER() OVER (ORDER BY ASOFDATE) rownum
+  FROM [ReferenceTables].[dbo].[Dim_FileDate] WHERE ASOFDATE >= \'2024-10-31\' AND ASOFDATE NOT IN  (SELECT MAX(asofdate) FROM dw1.dbo.Fact_History_Member_Status)
+
+
+) a
+
+DECLARE @Rownumbers INT = (SELECT COUNT(AsofDate) FROM #filedate)
+PRINT @Rownumbers
+DECLARE @currentrow INT = 1
+DECLARE @FileDate DATE
+
+
+WHILE @currentrow <= @Rownumbers
+
+BEGIN
+
+SET @FileDate = (SELECT ASOFDATE FROM #filedate WHERE rownum = @currentrow)
+DROP TABLE IF EXISTS #membershipUniverse
+SELECT * INTO #membershipUniverse FROM (
+
+SELECT  [INDIVIDUAL_ID]
+      ,[MEMBER_NBR]
+      ,CAST(DATEADD(HOUR,-6,[XPTIMESTAMP]) AS DATE) XPTIMESTAMP
+	  ,[TIN]
+	  ,BRANCH_NBR
+	  ,BIRTH_DATE
+	  
+	  ,ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY [XPTIMESTAMP] DESC) rownum
+  FROM [DW1].[dbo].[timestamp_Individual_Membership] WHERE CAST(DATEADD(HOUR,-6,XPTIMESTAMP) AS DATE) <= CAST(@FileDate AS DATE)
+  )a WHERE rownum = 1
+
+DROP TABLE IF EXISTS #OpenShareCount
+
+SELECT * INTO #OpenShareCount FROM (
+
+SELECT MEMBER_NBR, COUNT(DISTINCT MEMBER_NBR) ShareCount FROM dw1.dbo.Fact_History_Share_Status WHERE ASOFDATE = @FileDate AND STATUS = \'OPEN\'
+GROUP BY MEMBER_NBR
+)a
+
+DROP TABLE IF EXISTS #OpenLoanCount
+
+SELECT * INTO #OpenLoanCount FROM (
+
+SELECT MEMBER_NBR, COUNT(DISTINCT MEMBER_NBR) LoanCount FROM dw1.dbo.Fact_History_Share_Status WHERE ASOFDATE = @FileDate AND STATUS = \'OPEN\'
+GROUP BY MEMBER_NBR
+)a
+
+DROP TABLE IF EXISTS #RSA
+
+--SELECT * INTO #RSA FROM (
+
+--SELECT MEMBER_NBR, closed, MEMBER_BRANCH,  ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY XPTIMESTAMP DESC) rownum
+--FROM XP2_Daily_ODS_New.DB2INST1.SHARE WHERE CAST(DATEADD(HOUR,-6,XPTIMESTAMP) AS DATE) <= CAST(@FileDate AS DATE) 
+--AND SHARE_TYPE = 1 
+
+
+
+--)a WHERE a.rownum = 1 AND a.CLOSED <>-1
+
+
+
+DROP TABLE IF EXISTS #LastRSABranch
+
+SELECT * INTO #LastRSABranch FROM (
+
+SELECT MEMBER_NBR, closed, MEMBER_BRANCH,  ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY XPTIMESTAMP DESC) rownum
+FROM XP2_Daily_ODS_New.DB2INST1.SHARE WHERE CAST(DATEADD(HOUR,-6,XPTIMESTAMP) AS DATE) <= CAST(@FileDate AS DATE) 
+AND SHARE_TYPE = 1 
+)a WHERE a.rownum = 1 
+
+
+
+DELETE FROM dw1.dbo.Fact_History_Member_Status WHERE ASOFDATE = @FileDate
+
+INSERT INTO dw1.dbo.Fact_History_Member_Status
+
+SELECT DISTINCT
+ @FileDate ASOFDATE
+ ,a.INDIVIDUAL_ID
+ ,a.MEMBER_NBR
+ ,a.XPTIMESTAMP
+ ,a.TIN
+ , CASE
+	WHEN ISNULL(sc.sharecount,0) + ISNULL(lc.loancount,0) = 0 THEN \'CLOSED\'
+	ELSE \'OPEN\' END [STATUS]
+,a.BRANCH_NBR
+ ,a.BIRTH_DATE
+ ,COALESCE(c.MEMBER_BRANCH,d.BRANCH_NBR,a.BRANCH_NBR) [MEMBER_BRANCH]
+ ,\'XP2\'
+FROM #membershipUniverse a
+LEFT JOIN #OpenShareCount sc ON a.MEMBER_NBR = sc.MEMBER_NBR
+LEFT JOIN #OpenLoanCount lc ON a.MEMBER_NBR = lc.MEMBER_NBR
+--LEFT JOIN #rsa b ON a.MEMBER_NBR = b.MEMBER_NBR 
+LEFT JOIN #LastRSABranch c ON a.MEMBER_NBR = c.MEMBER_NBR
+LEFT JOIN ReferenceTables.dbo.[930 MEMBER BRANCH] d ON a.MEMBER_NBR = d.MEMBER_NBR AND d.BRANCH_NBR <> \'2424\'
+SET @currentrow = @currentrow + 1
+
+END''' Timeout: 600 Result=> QueryResult6
+# LOAD FACT HISTORY LOAN STATUS
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp3
+SELECT * INTO #temp3 FROM (
+SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
+WHERE asofdate >= \'2024-10-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM DW1.dbo.Fact_History_Loan_Status GROUP BY Asofdate)
+GROUP BY ASOFDATE
+)a
+
+DECLARE @timestampvar datetime 
+
+DROP TABLE IF EXISTS #purged_1
+
+SELECT * INTO #purged_1 FROM (
+
+SELECT * FROM DW1.dbo.Dim_Purged_Accts
+
+)a
+
+DROP TABLE IF EXISTS #temp17
+
+SELECT DISTINCT
+
+
+*
+	   
+	  INTO #temp17 FROM (
+
+SELECT * FROM
+	
+				XP2_MonthEnd_ODS.DB2INST1.LOAN
+				
+				UNION
+		SELECT * FROM
+	
+				XP2_Daily_ODS_New.DB2INST1.LOAN
+				
+
+)a
+
+
+
+DECLARE @Maxrownum INT = (SELECT COUNT(asofdate) FROM #temp3)
+
+DECLARE @ProcessDate DATE
+
+DECLARE @LastRow INT = 1
+
+WHILE @Maxrownum >= @LastRow
+	BEGIN 
+	
+	SET @ProcessDate = 
+(
+    SELECT ASOFDATE FROM #temp3 WHERE rownum = @Maxrownum GROUP BY ASOFDATE
+);
+
+DROP TABLE IF EXISTS #temp230
+
+SELECT * INTO #temp230 FROM (
+
+SELECT Member_Nbr, Loan_Nbr, DATEADD(HOUR,-6, Missing_Date) Missing_Date, Balance,ROW_NUMBER() OVER (PARTITION BY Member_Nbr, Loan_Nbr ORDER BY Missing_Date DESC) rownum 
+FROM dw1.dbo.Fact_History_Balance_Corrections_loans 
+WHERE CAST(DATEADD(HOUR,-6,missing_Date) AS DATE) = @ProcessDate 
+)a WHERE rownum = 1
+
+SET @timestampvar = 
+(SELECT MAX(xptimestamp) xptimestamp FROM DW1.dbo.Dim_BatchProcess WHERE FileDate <= @ProcessDate)
+
+DROP TABLE IF EXISTS #temp27
+
+SELECT * INTO #temp27 FROM (
+
+SELECT DISTINCT *,
+			ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, LOAN_NBR, OPEN_DATE ORDER BY XPTIMESTAMP DESC) rownum
+
+    FROM #temp17
+	--WHERE CASE
+	----WHEN  DATEPART(WEEKDAY,DATEADD(HOUR,-6, XPTIMESTAMP)) = 7 AND CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) = EOMONTH(DATEADD(HOUR,-6, XPTIMESTAMP))  THEN DATEADD(DAY,1,XPTIMESTAMP)
+	--WHEN XPTIMESTAMP <= \'2025-03-01 01:31:57.8712850\' THEN CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE)
+	--ELSE XPTIMESTAMP END <= @PROCESSDATE
+	WHERE XPTIMESTAMP <= @timestampvar
+	)a WHERE a.rownum = 1
+
+--DROP TABLE IF EXISTS DW1.DBO.Fact_History_Loan_Status
+DELETE FROM DW1.dbo.Fact_History_Loan_Status
+WHERE ASOFDATE = @ProcessDate;
+INSERT INTO DW1.dbo.Fact_History_Loan_Status
+--SELECT * INTO DW1.dbo.Fact_History_Loan_Status FROM (
+SELECT DISTINCT
+	@ProcessDate [ASOFDATE],
+       a.MEMBER_NBR,
+       a.LOAN_NBR,
+       a.[ORIG_LOAN_TYPE] [LOAN_TYPE],
+       a.OPEN_DATE,
+	   a.CLOSE_DATE,	
+	   a.CLOSED,
+	   a.WOFF_DATE,
+	   a.IS_WRITTEN_OFF,
+	   a.WOFF_AMOUNT,
+	   a.WOFF_TOT_RECOV_AMT,
+	 
+				CASE WHEN a.IS_WRITTEN_OFF = -1 AND BALANCE > 0 THEN a.balance
+			
+			 ELSE BALANCE
+			 END [BALANCE],
+	   
+	   --a.BALANCE,
+	   a.LIMIT,
+	   
+	    CASE WHEN a.IS_WRITTEN_OFF = -1 AND BALANCE <= 0 THEN \'CLOSED\'
+					WHEN a.IS_WRITTEN_OFF = -1 AND BALANCE > 0 THEN \'CHARGE-OFF\'
+					WHEN CLOSED = -1 THEN \'CLOSED\' 
+		ELSE \'OPEN\' END [STATUS],
+		
+       DATEADD(HOUR,-6,a.XPTIMESTAMP)
+	   
+FROM
+(
+    SELECT distinct a.*,b.[ORIG_LOAN_TYPE]
+    FROM #temp27 a
+	LEFT JOIN DW1.dbo.DIM_Orig_Loan_Type b ON a.MEMBER_NBR = b.MEMBER_NBR AND a.LOAN_NBR = b.LOAN_NBR AND a.OPEN_DATE = b.ORIG_OPEN_DATE
+    --LEFT JOIN #temp230 c ON a.MEMBER_NBR = c.Member_Nbr AND a.Loan_NBR = c.Loan_NBR AND @ProcessDate BETWEEN \'2025-03-01\' AND \'2025-03-31\'
+	WHERE CAST(DATEADD(HOUR, -6, a.XPTIMESTAMP) AS DATE) <= @ProcessDate 
+	
+) a
+WHERE a.rownum = 1  
+
+	--ORDER BY Member_nbr, Loan_NBr
+--)a 
+;
+
+	SET @Maxrownum = @Maxrownum - 1
+END''' Timeout: 900 Result=> QueryResult
+# UPDATE timestamp_Loans
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @MaxDate DATE = (SELECT ISNULL(MAX(asofdate),\'2017-01-01\') FROM DW1.dbo.timestamp_Loan)
+DECLARE @currentDate DATE = DATEADD(dd,-1,GETDATE())
+
+
+DECLARE @LoopVar INT = DATEDIFF(dd,@MaxDate,@currentDate)
+DECLARE @ASOFDATE DATE
+
+WHILE @LOOPVAR >= 0
+	
+
+
+
+	BEGIN
+	PRINT @LoopVar
+	SET @ASOFDATE = DATEADD(dd,-@LoopVar,DATEADD(dd,1,@currentDate))
+	PRINT @ASOFDATE
+
+	DROP TABLE IF EXISTS #temp2
+	SELECT * INTO #temp2 FROM (
+	SELECT MEMBER_NBR, LOAN_NBR, OPEN_DATE, XPTIMESTAMP, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, LOAN_NBR ORDER BY XPTIMESTAMP DESC) rownum FROM XP2_Daily_ODS_New.db2inst1.Loan
+	WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE) a WHERE a.rownum = 1 
+
+	DELETE FROM dw1.dbo.timestamp_Loan WHERE asofdate = @ASOFDATE
+	INSERT INTO dw1.dbo.timestamp_Loan    
+	SELECT MEMBER_NBR, LOAN_NBR, OPEN_DATE, XPTIMESTAMP, @ASOFDATE ASOFDATE FROM #temp2
+	
+	SET @LOOPVAR = @LOOPVAR - 1
+	END''' Timeout: 900 Result=> QueryResult
+# Update Fact_History_Share_Status
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp3;
+SELECT *
+INTO #temp3
+FROM
+(
+    SELECT ASOFDATE,
+           ROW_NUMBER() OVER (ORDER BY ASOFDATE DESC) rownum
+    FROM ReferenceTables.dbo.Dim_FileDate
+    WHERE ASOFDATE >=\'2025-01-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM DW1.dbo.Fact_History_Share_Status GROUP BY Asofdate)
+    GROUP BY ASOFDATE
+) a;
+
+
+
+DECLARE @timestampvar datetime 
+
+DROP TABLE IF EXISTS #purged_1
+
+SELECT * INTO #purged_1 FROM (
+
+SELECT * FROM DW1.dbo.Dim_Purged_Accts
+
+)a
+
+
+DROP TABLE IF EXISTS #temp15
+
+SELECT DISTINCT
+
+
+*
+	   
+	  INTO #temp15 FROM (
+
+SELECT * FROM
+	
+				XP2_MonthEnd_ODS.DB2INST1.SHARE
+				
+				UNION
+		SELECT * FROM
+	
+				XP2_Daily_ODS_New.DB2INST1.SHARE
+				
+
+)a
+
+
+
+DECLARE @Maxrownum INT = (SELECT COUNT(asofdate) FROM #temp3)
+
+DECLARE @ProcessDate DATE
+
+DECLARE @LastRow INT = 1
+
+WHILE @Maxrownum >= @LastRow
+	BEGIN 
+	
+	SET @ProcessDate = 
+(
+    SELECT ASOFDATE FROM #temp3 WHERE rownum = @Maxrownum GROUP BY ASOFDATE
+);
+
+DROP TABLE IF EXISTS #temp23
+
+SELECT * INTO #temp23 FROM (
+
+SELECT Member_Nbr, Share_Nbr, DATEADD(HOUR,-6, Missing_Date) Missing_Date, Balance,ROW_NUMBER() OVER (PARTITION BY Member_Nbr, Share_Nbr ORDER BY Missing_Date DESC) rownum 
+FROM dw1.dbo.Fact_History_Balance_Corrections 
+WHERE CAST(DATEADD(HOUR,-6,missing_Date) AS DATE) = @ProcessDate 
+)a WHERE rownum = 1
+
+--SELECT * FROM #temp23
+
+SET @timestampvar = 
+(SELECT MAX(xptimestamp) xptimestamp FROM DW1.dbo.Dim_BatchProcess WHERE FileDate <= @ProcessDate)
+
+
+DROP TABLE IF EXISTS #temp25
+
+SELECT * INTO #temp25 FROM (
+
+SELECT DISTINCT *,CASE WHEN DATEPART(WEEKDAY,DATEADD(HOUR,-6, XPTIMESTAMP)) = 7 THEN LAST_CUST_CONT_DATE ELSE CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) END testdate,
+           ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, SHARE_NBR, OPEN_DATE ORDER BY XPTIMESTAMP DESC, closed ASC) rownum
+
+    FROM #temp15
+	WHERE 
+	--CASE WHEN DATEPART(WEEKDAY,DATEADD(HOUR,-6, XPTIMESTAMP)) = 7 AND CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) = EOMONTH(DATEADD(HOUR,-6, XPTIMESTAMP))  THEN LAST_CUST_CONT_DATE ELSE CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) END  <= @PROCESSDATE
+	 XPTIMESTAMP <= @timestampvar
+	)a WHERE 
+	
+	a.rownum = 1 
+
+DELETE FROM DW1.dbo.Fact_History_Share_Status
+WHERE ASOFDATE = @ProcessDate;
+INSERT INTO DW1.dbo.Fact_History_Share_Status
+SELECT @ProcessDate [ASOFDATE],
+       a.MEMBER_NBR,
+         a.SHARE_NBR,
+       CASE WHEN a.MEMBER_NBR = 1011775 AND a.SHARE_NBR = 15 THEN 81 ELSE a.SHARE_TYPE END SHARE_TYPE,
+       
+	   CASE 
+	   WHEN a.MEMBER_NBR = 1011775 AND a.SHARE_NBR = 15 AND @ProcessDate > \'2025-01-31\' THEN 0
+	   WHEN ap.Balance IS NOT NULL   THEN ap.Balance
+	   WHEN @Processdate > \'2024-12-31\' AND pg.Member_NBR IS NOT NULL AND a.BALANCE = 0 THEN 0 
+	   
+	   ELSE a.BALANCE END [Balance],
+       CASE
+	   WHEN a.MEMBER_NBR = 1011775 AND a.SHARE_NBR = 15 AND @ProcessDate > \'2025-01-31\' THEN -1
+	   WHEN @Processdate > \'2024-12-31\' AND pg.Member_NBR IS NOT NULL AND a.BALANCE = 0 THEN -1 ELSE a.CLOSED END [Closed],
+       a.OPEN_DATE,
+       a.CLOSE_DATE,
+       a.WOFF_DATE,
+       CASE
+	    --   WHEN a.SHARE_TYPE = 1 AND a.BALANCE = 0.00 THEN \'CLOSED\'
+		   --WHEN b.[Class Name] = \'Certificate\' AND a.BALANCE <= 0.00 THEN \'CLOSED\'
+          WHEN @Processdate > \'2024-12-31\' and pg.Member_NBR IS NOT NULL AND a.BALANCE = 0 THEN \'CLOSED\' 
+		  WHEN  a.CLOSED  = -1 THEN
+               \'CLOSED\'
+           ELSE
+               \'OPEN\'
+       END [STATUS],
+        XPTIMESTAMP
+		--,ap.Missing_Date
+		--,ap.balance
+FROM
+(
+    SELECT * FROM #temp25
+) a
+LEFT JOIN (SELECT * FROM DW1.dbo.dim_CombinedProductCodes WHERE [Loan/Deposit] = \'Deposit\') b ON a.SHARE_TYPE = b.[Type]
+LEFT JOIN (SELECT * FROM #purged_1) pg ON a.MEMBER_NBR = pg.member_nbr AND a.SHARE_NBR = pg.share_nbr AND \'2024-12-31\' >= a.OPEN_DATE
+LEFT JOIN  #temp23 ap ON a.MEMBER_NBR = ap.MEMBER_NBR AND a.SHARE_NBR = ap.Share_Nbr AND CAST(a.XPTIMESTAMP AS DATE) <= CAST(ap.missing_date AS DATE) AND CAST(a.XPTIMESTAMP AS DATE) > EOMONTH(CAST(ap.missing_date AS DATE),-2)
+WHERE a.rownum = 1 
+
+	SET @Maxrownum = @Maxrownum - 1
+END''' Timeout: 400 Result=> QueryResult5
+# UPDATE Delinquency Report Data
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+
+--PRINT DATEDIFF(dd,\'2024-11-30\', GETDATE())
+
+DECLARE @ASOFDATE DATE = DATEADD(dd,-1,GETDATE())
+
+
+DROP TABLE IF EXISTS #memberwarning1
+
+SELECT * INTO #memberwarning1 FROM (
+
+SELECT *, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY XPTIMESTAMP DESC, ADD_DATE desc) rownum FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIPWARNING WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE AND WARNING_TYPE = 1 AND WARNING_CODE = 1 
+
+)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #memberwarning2
+
+SELECT * INTO #memberwarning2 FROM (
+
+SELECT *, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY XPTIMESTAMP DESC, ADD_DATE desc) rownum FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIPWARNING WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE AND WARNING_EXPIRATION_DATE >= @ASOFDATE AND WARNING_TYPE = 2 AND WARNING_CODE = 0 
+
+)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #memberwarning
+
+SELECT * INTO #memberwarning FROM (
+SELECT 
+a.[INDEX]
+,a.MEMBER_NBR
+,a.WARNING_TYPE
+,a.WARNING_CODE
+,b.WARNING_TEXT
+,b.WARNING_EXPIRATION_DATE
+,a.XPTIMESTAMP
+FROM #memberwarning1 a
+JOIN #memberwarning2 b ON a.MEMBER_NBR = b.MEMBER_NBR
+)a
+
+DROP TABLE IF EXISTS #lastcreditscore
+SELECT * INTO #lastcreditscore FROM (
+
+select distinct apl.aplnum, max(score.cb_score) as cb_score
+   from XP2_Daily_ODS_New.DB2INST1.application apl
+     inner join XP2_Daily_ODS_New.DB2INST1.applicationindividual ai
+       on apl.aplnum = ai.aplnum
+     inner join XP2_Daily_ODS_New.DB2INST1.individualcbreport icb
+       on ai.individual_id = icb.individual_id
+     inner join XP2_Daily_ODS_New.DB2INST1.applicationcbreport acb
+       on apl.aplnum = acb.aplnum
+         and icb.cr_rpt_id = acb.cr_rpt_id
+     inner join XP2_Daily_ODS_New.DB2INST1.CBREPORT cbr
+       on acb.cr_rpt_id = cbr.cr_rpt_id
+         and cbr.cb_rpt_type = \'M\'
+         and cbr.failed = 0
+     inner join XP2_Daily_ODS_New.DB2INST1.cbreportcbsummaryreport cbr_cbs
+       on cbr.cr_rpt_id = cbr_cbs.cr_rpt_id
+     inner join XP2_Daily_ODS_New.DB2INST1.cbscore score
+       on cbr_cbs.cr_rpt_sum_id = score.cr_rpt_sum_id
+     inner join XP2_Daily_ODS_New.DB2INST1.cbriskmodel rm
+       on score.cb_risk_model_cd = rm.cb_risk_model_cd
+         and score.cb_risk_model_cd <> \'B\'
+  where acb.cr_rpt_id =
+         (
+          select max(acb2.cr_rpt_id)
+            from XP2_Daily_ODS_New.DB2INST1.applicationcbreport acb2
+              inner join XP2_Daily_ODS_New.DB2INST1.applicationindividual ai2
+                on acb2.aplnum = ai2.aplnum
+              inner join XP2_Daily_ODS_New.DB2INST1.individualcbreport icb2
+                on ai2.individual_id = icb2.individual_id
+              inner join XP2_Daily_ODS_New.DB2INST1.cbreportcbsummaryreport cbr_cbs2
+                on acb2.cr_rpt_id = cbr_cbs2.cr_rpt_id
+                  and icb2.cr_rpt_id = cbr_cbs2.cr_rpt_id
+              inner join XP2_Daily_ODS_New.DB2INST1.cbscore score2
+                on cbr_cbs2.cr_rpt_sum_id = score2.cr_rpt_sum_id
+            where acb2.aplnum = apl.aplnum
+              and ai2.individual_id = ai.individual_id
+              and score2.cb_risk_model_cd = score.cb_risk_model_cd
+         )
+  group by apl.aplnum
+)a
+
+
+
+DROP TABLE IF EXISTS #application
+
+SELECT * INTO #application FROM (
+ SELECT *, ROW_NUMBER() OVER (PARTITION BY MEMNBR ORDER BY XPTIMESTAMP DESC) rownum FROM XP2_Daily_ODS_New.DB2INST1.APPLICATION
+)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #individualProperty
+
+SELECT * INTO #individualProperty FROM  (
+
+	SELECT *, ROW_NUMBER() OVER (PARTITION BY INDIVIDUAL_ID ORDER BY XPTIMESTAMP DESC) rownum  FROM XP2_Daily_ODS_New.DB2INST1.INDIVIDUALPROPERTY WHERE ITEM_NAME = \'OXCreditScore\'
+
+)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #phone
+
+SELECT * INTO #phone FROM (
+
+SELECT *, ROW_NUMBER() OVER(PARTITION BY INDIVIDUAL_ID, PHONE_TYPE ORDER BY XPTIMESTAMP DESC) rownum FROM XP2_Daily_ODS_New.DB2INST1.PHONE WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE AND IS_PRIMARY_FOR_TYPE = 1
+
+)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #email
+
+SELECT * INTO #email FROM (
+
+SELECT *, ROW_NUMBER() OVER (PARTITION BY INDIVIDUAL_ID ORDER BY XPTIMESTAMP DESC) rownum FROM XP2_Daily_ODS_New.DB2INST1.EMAIL WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE AND IS_PRIMARY = 1
+
+)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #IndividualAddress
+SELECT * INTO #IndividualAddress FROM (
+
+	SELECT *, ROW_NUMBER() OVER (PARTITION BY individual_ID ORDER BY XPTIMESTAMP DESC) AS rownnum FROM XP2_Daily_ODS_New.DB2INST1.INDIVIDUALADDRESS WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE AND IS_PRIMARY = 1 AND INDIVIDUAL_ADDRESS_TYPE = 1 AND DATE_OF_ADDR_END IS NULL 
+ 
+ )a WHERE a.rownnum = 1
+ 
+ DROP TABLE IF EXISTS #Address
+SELECT * INTO #Address FROM (
+
+	SELECT *, ROW_NUMBER() OVER (PARTITION BY Address_ID ORDER BY XPTIMESTAMP DESC) AS rownnum FROM XP2_Daily_ODS_New.DB2INST1.ADDRESS WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE
+ 
+ )a WHERE a.rownnum = 1
+
+ DROP TABLE IF EXISTS #individual
+ SELECT * INTO #individual FROM (
+
+ SELECT *, ROW_NUMBER() OVER (PARTITION BY INDIVIDUAL_ID, INDIVIDUAL_TYPE ORDER BY XPTIMESTAMP desc)AS rownum FROM XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE
+ ) a WHERE a.rownum = 1
+
+ DROP TABLE IF EXISTS #membership
+ SELECT * INTO #membership FROM (
+
+SELECT *, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY XPTIMESTAMP DESC) rownum FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIP WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE
+
+)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #membershipparticipant
+SELECT * INTO #membershipparticipant FROM (
+
+SELECT MEMBER_NBR, INDIVIDUAL_ID, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, INDIVIDUAL_ID ORDER BY XPTIMESTAMP DESC) rownum FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIPPARTICIPANT WHERE PARTICIPATION_TYPE = 101 and CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE
+
+)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #loan
+SELECT * INTO #loan FROM (
+
+	SELECT *, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, LOAN_NBR, OPEN_DATE ORDER BY XPTIMESTAMP desc) rownum FROM XP2_Daily_ODS_New.DB2INST1.LOAN WHERE CAST(DATEADD(hh,-6,XPTIMESTAMP) AS DATE) <= @ASOFDATE 
+)a WHERE a.rownum = 1
+
+DELETE FROM dw1.dbo.view_DelinquencyReport WHERE ASOFDATE = @ASOFDATE
+
+INSERT INTO dw1.dbo.view_DelinquencyReport
+(
+    ASOFDATE,
+    [LOAN TYPE],
+    DESCRIPTION,
+    [LOAN CODE],
+	[CATEGORY],
+    [MEMBER NUMBER],
+    [LOAN NUMBER],
+    [PAST DUE PAYMENT COUNT],
+    [DELINQUENT MONTHS],
+    BALANCE,
+    [DAYS DELINQUENT],
+    [CREDIT SCORE],
+    [MEMBER NAME],
+    EMAIL,
+    ATTN_LINE,
+    ADDRESS1,
+    ADDRESS2,
+    ADDRESS3,
+    CITY,
+    STATE,
+    ZIP_STR,
+    ZIP4_STR,
+    [HOME PH],
+    [CELL PH],
+    [BUS PH],
+    ISBKY,
+    [BKY NOTE],
+    [BKY EXPIRE DATE],
+    [LAS PAYMENT DATE],
+    [OPEN DATE],
+    [DATA SOURCE]
+)
+
+
+SELECT 
+DISTINCT 
+a.ProcessDate ASOFDATE
+,d.LOAN_TYPE [Loan Type]
+,lt.[DESC] [Description]
+,lt.[Loan Code] [Loan Code]
+,lt.Category
+,a.MEMBER_NBR
+,a.LOAN_NBR
+,a.NBRPMT [Past Due Payment Count]
+,a.DELMTH [Delinqueny Months]
+,CASE
+	WHEN d.WOFF_AMOUNT > 0 THEN 0
+	ELSE ISNULL(a.PAYOFF,0) - ISNULL(a.ACRUED,0) -  ISNULL(a.TOTFEE,0) END [Balance]
+,a.DAYSDEL [Days Delinquent]
+,lcs.cb_score [Credit Score]
+,ind.D1NAME [Member Name]
+,eml.EMAIL_ADDRESS [EMAIL]
+,ad.ATTN_LINE
+,ad.ADDRESS1
+,ad.ADDRESS2
+,ad.ADDRESS3
+,ad.CITY
+,ad.STATE
+,ad.ZIP_STR
+,ad.ZIP4_STR
+,hph.PHONE_STR [Home Ph]
+,cph.PHONE_STR [Cell Ph]
+,bph.PHONE_STR [Bus Ph]
+, CASE
+	WHEN mw.WARNING_TYPE IS NOT NULL THEN \'Y\'
+	ELSE \'N\' END [isBKY]
+,mw.WARNING_TEXT [Bky Note]
+,mw.WARNING_EXPIRATION_DATE [Bky Expire Date]
+, d.LAST_PAYMENT_DATE [Last Payment Date]
+,d.OPEN_DATE [Open Date]
+,\'XP2\' [Data Source]
+
+
+
+
+
+FROM XP2_Daily_ODS_New.DB2INST1.AGR_LOANDELQ a
+JOIN #membership b ON a.MEMBER_NBR = b.MEMBER_NBR
+JOIN #membershipparticipant c ON b.MEMBER_NBR = c.MEMBER_NBR 
+JOIN #loan d ON a.LOAN_NBR = d.LOAN_NBR AND a.MEMBER_NBR = d.MEMBER_NBR
+LEFT JOIN dw1.dbo.dim_LoanType lt ON CONVERT(BIGINT,d.LOAN_TYPE) = lt.[Loan Type]
+LEFT JOIN #individual ind ON c.INDIVIDUAL_ID = ind.INDIVIDUAL_ID
+LEFT JOIN #IndividualAddress ia ON ind.INDIVIDUAL_ID = ia.INDIVIDUAL_ID
+LEFT JOIN #Address ad ON ia.ADDRESS_ID = ad.ADDRESS_ID
+LEFT JOIN #email eml ON ind.INDIVIDUAL_ID = eml.INDIVIDUAL_ID
+LEFT JOIN #phone hph ON ind.INDIVIDUAL_ID = hph.INDIVIDUAL_ID AND \'H\' = hph.PHONE_TYPE
+LEFT JOIN #phone cph ON ind.INDIVIDUAL_ID = cph.INDIVIDUAL_ID AND \'C\' = cph.PHONE_TYPE
+LEFT JOIN #phone bph ON ind.INDIVIDUAL_ID = bph.INDIVIDUAL_ID AND \'B\' = bph.PHONE_TYPE
+LEFT JOIN #individualProperty idp ON ind.INDIVIDUAL_ID = idp.INDIVIDUAL_ID
+LEFT JOIN #memberwarning mw ON a.MEMBER_NBR = mw.MEMBER_NBR
+LEFT JOIN #application app ON a.MEMBER_NBR = app.MEMNBR
+LEFT JOIN #lastcreditscore lcs ON app.APLNUM = lcs.APLNUM
+WHERE a.ProcessDate = @ASOFDATE AND d.LOAN_TYPE <> 98 AND ISNULL(d.WOFF_AMOUNT,0) = 0 AND (ISNULL(d.closed,0) = 0) 
+
+ORDER BY a.MEMBER_NBR''' Timeout: 900 Result=> QueryResult
+# UPDATE ADD SSN FROM OFF-SYSTEM DATA
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp2
+SELECT * INTO #temp2 FROM (
+SELECT TIN FROM ReferenceTables.dbo.SSN_ID)a
+
+INSERT INTO ReferenceTables.dbo.SSN_ID
+
+SELECT DISTINCT TIN FROM (
+SELECT REPLACE([column 3],\'-\',\'\') TIN
+FROM Off_System_ODS.dbo.Staging_TRUHOME_PII
+GROUP BY [column 3]
+UNION
+SELECT REPLACE(SSN,\'-\',\'\')
+FROM Off_System_ODS.dbo.Staging_Student_LOANs_REF
+GROUP BY SSN
+UNION
+SELECT TAXID
+FROM Off_System_ODS.dbo.staging_PHH
+GROUP BY TAXID
+UNION
+SELECT 
+sec_mortgagor_ss_number
+FROM Off_System_ODS.dbo.staging_DMI
+GROUP BY sec_mortgagor_ss_number
+UNION
+SELECT CIF_SOCIAL_SECURITY FROM Off_System_ODS.dbo.Staging_Credit_Cards
+GROUP BY CIF_SOCIAL_SECURITY
+
+)a WHERE TIN NOT IN (SELECT tin FROM #temp2)''' Timeout: 120 Result=> QueryResult4
+# Updated timestamp Individual Membership
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp30
+SELECT * INTO #temp30 FROM (
+SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
+WHERE asofdate >=\'2024-10-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM DW1.dbo.timestamp_Individual_Membership GROUP BY Asofdate)
+GROUP BY ASOFDATE
+)a
+
+DECLARE @Maxrownum INT = (SELECT COUNT(asofdate) FROM #temp30)
+
+DECLARE @ProcessDate DATE
+
+DECLARE @LastRow INT = 1
+
+WHILE @Maxrownum >= @LastRow
+	BEGIN 
+	
+	SET @ProcessDate = 
+(
+    SELECT ASOFDATE FROM #temp30 WHERE rownum = @Maxrownum GROUP BY ASOFDATE
+);
+
+DROP TABLE IF EXISTS #tempIndividual
+
+SELECT * INTO #tempIndividual FROM (
+
+SELECT *, ROW_NUMBER() OVER (PARTITION BY individual_ID ORDER BY XPTIMESTAMP DESC) rownum FROM (
+
+SELECT * FROM XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+UNION
+SELECT * FROM XP2_MonthEnd_ODS.DB2INST1.INDIVIDUAL WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+
+)a
+
+)b WHERE b.rownum = 1
+
+
+
+DROP TABLE IF EXISTS #tempMEMBERSHIPPARTICIPANT
+
+SELECT * INTO #tempMEMBERSHIPPARTICIPANT FROM (
+SELECT 
+	INDIVIDUAL_ID, MEMBER_NBR, ROW_NUMBER() OVER (PARTITION BY individual_ID ORDER BY XPTIMESTAMP DESC) rownum
+
+FROM (
+
+SELECT INDIVIDUAL_ID, MEMBER_NBR, XPTIMESTAMP FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIPPARTICIPANT WHERE [INDEX] = 1 AND DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+UNION
+SELECT INDIVIDUAL_ID, MEMBER_NBR, XPTIMESTAMP FROM XP2_MonthEnd_ODS.DB2INST1.MEMBERSHIPPARTICIPANT  WHERE [INDEX] = 1 AND DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+
+)a
+
+)b WHERE b.rownum = 1
+
+DROP TABLE IF EXISTS #tempMEMBERSHIP
+
+SELECT * INTO #tempMEMBERSHIP FROM (
+
+SELECT 
+	MEMBER_NBR, a.BRANCH, a.OPEN_BRANCH_NBR, ROW_NUMBER() OVER (PARTITION BY a.MEMBER_NBR ORDER BY XPTIMESTAMP DESC) rownum
+
+FROM (
+
+SELECT MEMBER_NBR, BRANCH, OPEN_BRANCH_NBR, XPTIMESTAMP FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIP WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+UNION
+SELECT MEMBER_NBR, BRANCH, OPEN_BRANCH_NBR, XPTIMESTAMP FROM XP2_MonthEnd_ODS.DB2INST1.MEMBERSHIP WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @ProcessDate
+
+)a
+
+)b WHERE b.rownum = 1
+
+
+
+
+
+
+
+--DROP TABLE IF EXISTS DW1.dbo.timestamp_Individual_Membership
+
+--SELECT * INTO DW1.dbo.timestamp_Individual_Membership FROM (
+DELETE FROM DW1.dbo.timestamp_Individual_Membership WHERE [AsofDate] = @ProcessDate
+INSERT INTO DW1.dbo.timestamp_Individual_Membership
+SELECT  
+@processDate [AsofDate]
+,a.INDIVIDUAL_ID
+, b.MEMBER_NBR
+, a.XPTIMESTAMP
+, a.TIN
+,a.BIRTH_DATE
+,COALESCE(a.BRANCH_NBR,c.BRANCH,c.OPEN_BRANCH_NBR) [BRANCH_NBR]
+, ROW_NUMBER() OVER (PARTITION BY a.INDIVIDUAL_ID, b.MEMBER_NBR, a.TIN ORDER BY a.XPTIMESTAMP ASC) rownum
+--, CAST(DATEADD(HOUR,-6,a.XPTIMESTAMP) AS DATE) XPTIMESTAMP 
+FROM #tempIndividual a
+LEFT JOIN #tempMEMBERSHIPPARTICIPANT b ON a.INDIVIDUAL_ID = b.INDIVIDUAL_ID
+LEFT JOIN #tempMEMBERSHIP c ON b.MEMBER_NBR = c.MEMBER_NBR
+WHERE b.MEMBER_NBR IS NOT NULL
+
+--)a where rownum = 1
+
+	SET @Maxrownum = @Maxrownum - 1
+END''' Timeout: 600 Result=> QueryResult5
+/# LOAD FACT HISTORY INDIVIDUAL
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #tempdate
+SELECT * INTO #tempdate FROM (
+SELECT *, ROW_NUMBER() OVER (ORDER BY ASOFDATE) rownum FROM ReferenceTables.dbo.Dim_FileDate WHERE ASOFDATE > (SELECT MAX(asofdate) FROM dw1.dbo.Fact_History_Individual)
+) a
+
+
+DECLARE @incvar int = 1
+DECLARE @maxincvar INT = (SELECT MAX(rownum) FROM #tempdate)
+DECLARE @ASOFDATE DATE 
+
+WHILE @incvar <= @maxincvar
+	BEGIN
+
+		DROP TABLE IF EXISTS #individualmember
+		SELECT * INTO #individualmember FROM (
+		SELECT *
+		--, ROW_NUMBER() OVER (PARTITION BY Individual_ID, Member_Nbr ORDER BY xptimestamp DESC) rownum 
+		FROM dw1.dbo.timestamp_Individual_Membership
+		)a WHERE a.rownum = 1
+
+		SET @ASOFDATE = (SELECT Asofdate FROM #tempdate WHERE rownum = @incvar)
+		
+
+		--DROP TABLE IF EXISTS dw1.dbo.Fact_History_Individual
+		--SELECT * INTO dw1.dbo.Fact_History_Individual FROM (
+		DELETE FROM dw1.dbo.Fact_History_Individual WHERE asofdate = @asofdate
+		INSERT INTO dw1.dbo.Fact_History_Individual
+		SELECT DISTINCT
+        @asofdate [ASOFDATE]
+		,a.INDIVIDUAL_ID,
+       BIRTH_DATE,
+       GENDER,
+       [IS_MEMBER],
+       [IS_ACCT_OWNER],
+       [IS_CU_EMPLOYEE],
+       [D1NAME],
+       [FIRST_NAME],
+       [MIDDLE_NAME],
+       [LAST_NAME],
+       TIN,
+       --LAST_CONTACT_DATETIME,
+       MEMBERSHIP_DATETIME,
+       BRANCH_NBR
+	  
+
+FROM XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL a
+JOIN (SELECT Individual_ID, xptimestamp FROM #individualmember GROUP BY Individual_ID, xptimestamp) b ON a.INDIVIDUAL_ID = b.Individual_ID AND a.XPTIMESTAMP = b.XPTIMESTAMP
+WHERE CAST(DATEADD(HOUR,-6,a.XPTIMESTAMP) AS DATE) <= @asofdate
+
+--)a
+
+SET @incvar = @incvar + 1
+
+END''' Timeout: 600 Result=> QueryResult6
+/# LOAD FACT MEMBER STATUS
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #filedate
+SELECT * INTO #filedate FROM (
+
+SELECT [ASOFDATE]
+      ,[PREVDATE]
+      ,[CURRMONTHEND]
+      ,[PREVMONTHEND]
+      ,[CURRQTREND]
+      ,[PREVQTREND]
+      ,[CURRYEND]
+      ,[PREVYEND]
+	 , ROW_NUMBER() OVER (ORDER BY ASOFDATE) rownum
+  FROM [ReferenceTables].[dbo].[Dim_FileDate] WHERE ASOFDATE >= \'2024-10-31\' AND ASOFDATE NOT IN  (SELECT MAX(asofdate) FROM dw1.dbo.Fact_History_Member_Status)
+
+
+) a
+
+DECLARE @Rownumbers INT = (SELECT COUNT(AsofDate) FROM #filedate)
+PRINT @Rownumbers
+DECLARE @currentrow INT = 1
+DECLARE @FileDate DATE
+
+
+WHILE @currentrow <= @Rownumbers
+
+BEGIN
+
+SET @FileDate = (SELECT ASOFDATE FROM #filedate WHERE rownum = @currentrow)
+DROP TABLE IF EXISTS #membershipUniverse
+SELECT * INTO #membershipUniverse FROM (
+
+SELECT  [INDIVIDUAL_ID]
+      ,[MEMBER_NBR]
+      ,CAST(DATEADD(HOUR,-6,[XPTIMESTAMP]) AS DATE) XPTIMESTAMP
+	  ,[TIN]
+	  ,BRANCH_NBR
+	  ,BIRTH_DATE
+	  
+	  ,ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY [XPTIMESTAMP] DESC) rownum
+  FROM [DW1].[dbo].[timestamp_Individual_Membership] WHERE CAST(DATEADD(HOUR,-6,XPTIMESTAMP) AS DATE) <= CAST(@FileDate AS DATE)
+  )a WHERE rownum = 1
+
+DROP TABLE IF EXISTS #OpenShareCount
+
+SELECT * INTO #OpenShareCount FROM (
+
+SELECT MEMBER_NBR, COUNT(DISTINCT MEMBER_NBR) ShareCount FROM dw1.dbo.Fact_History_Share_Status WHERE ASOFDATE = @FileDate AND STATUS = \'OPEN\'
+GROUP BY MEMBER_NBR
+)a
+
+DROP TABLE IF EXISTS #OpenLoanCount
+
+SELECT * INTO #OpenLoanCount FROM (
+
+SELECT MEMBER_NBR, COUNT(DISTINCT MEMBER_NBR) LoanCount FROM dw1.dbo.Fact_History_Share_Status WHERE ASOFDATE = @FileDate AND STATUS = \'OPEN\'
+GROUP BY MEMBER_NBR
+)a
+
+DROP TABLE IF EXISTS #RSA
+
+--SELECT * INTO #RSA FROM (
+
+--SELECT MEMBER_NBR, closed, MEMBER_BRANCH,  ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY XPTIMESTAMP DESC) rownum
+--FROM XP2_Daily_ODS_New.DB2INST1.SHARE WHERE CAST(DATEADD(HOUR,-6,XPTIMESTAMP) AS DATE) <= CAST(@FileDate AS DATE) 
+--AND SHARE_TYPE = 1 
+
+
+
+--)a WHERE a.rownum = 1 AND a.CLOSED <>-1
+
+
+
+DROP TABLE IF EXISTS #LastRSABranch
+
+SELECT * INTO #LastRSABranch FROM (
+
+SELECT MEMBER_NBR, closed, MEMBER_BRANCH,  ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY XPTIMESTAMP DESC) rownum
+FROM XP2_Daily_ODS_New.DB2INST1.SHARE WHERE CAST(DATEADD(HOUR,-6,XPTIMESTAMP) AS DATE) <= CAST(@FileDate AS DATE) 
+AND SHARE_TYPE = 1 
+)a WHERE a.rownum = 1 
+
+
+
+DELETE FROM dw1.dbo.Fact_History_Member_Status WHERE ASOFDATE = @FileDate
+
+INSERT INTO dw1.dbo.Fact_History_Member_Status
+
+SELECT DISTINCT
+ @FileDate ASOFDATE
+ ,a.INDIVIDUAL_ID
+ ,a.MEMBER_NBR
+ ,a.XPTIMESTAMP
+ ,a.TIN
+ , CASE
+	WHEN ISNULL(sc.sharecount,0) + ISNULL(lc.loancount,0) = 0 THEN \'CLOSED\'
+	ELSE \'OPEN\' END [STATUS]
+,a.BRANCH_NBR
+ ,a.BIRTH_DATE
+ ,COALESCE(c.MEMBER_BRANCH,d.BRANCH_NBR,a.BRANCH_NBR) [MEMBER_BRANCH]
+ ,\'XP2\'
+FROM #membershipUniverse a
+LEFT JOIN #OpenShareCount sc ON a.MEMBER_NBR = sc.MEMBER_NBR
+LEFT JOIN #OpenLoanCount lc ON a.MEMBER_NBR = lc.MEMBER_NBR
+--LEFT JOIN #rsa b ON a.MEMBER_NBR = b.MEMBER_NBR 
+LEFT JOIN #LastRSABranch c ON a.MEMBER_NBR = c.MEMBER_NBR
+LEFT JOIN ReferenceTables.dbo.[930 MEMBER BRANCH] d ON a.MEMBER_NBR = d.MEMBER_NBR AND d.BRANCH_NBR <> \'2424\'
+SET @currentrow = @currentrow + 1
+
+END''' Timeout: 600 Result=> QueryResult6
+/# Update view_Deposit_Dashboard
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp10;
+SELECT * INTO #temp10 FROM (
+SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
+WHERE asofdate >=\'2025-01-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM DW1.dbo.view_Deposit_Dashboards WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
+GROUP BY ASOFDATE
+)a
+
+DECLARE @timestampvar datetime 
+
+DROP TABLE IF EXISTS #purged_2
+
+SELECT * INTO #purged_2 FROM (
+
+SELECT * FROM DW1.dbo.Dim_Purged_Accts
+
+)a
+
+DROP TABLE IF EXISTS #temp150
+
+SELECT DISTINCT
+
+
+*
+	   
+	  INTO #temp150 FROM (
+
+SELECT * FROM
+	
+				XP2_MonthEnd_ODS.DB2INST1.SHARE
+				
+				UNION
+		SELECT * FROM
+	
+				XP2_Daily_ODS_New.DB2INST1.SHARE
+				
+
+)a
+
+
+DECLARE @Maxrownum INT =
+        (
+            SELECT COUNT(ASOFDATE)FROM #temp10
+        );
+
+DECLARE @ProcessDate DATE;
+
+DECLARE @LastRow INT = 1;
+
+WHILE @Maxrownum >= @LastRow
+BEGIN
+
+    SET @ProcessDate =
+    (
+        SELECT ASOFDATE FROM #temp10 WHERE rownum = @Maxrownum GROUP BY ASOFDATE
+    );
+
+	
+
+
+SET @timestampvar = 
+(SELECT MAX(xptimestamp) xptimestamp FROM DW1.dbo.Dim_BatchProcess WHERE FileDate <= @ProcessDate)
+
+
+DROP TABLE IF EXISTS #temp250
+
+--SELECT * INTO #temp250 FROM (
+
+--SELECT DISTINCT *,
+--           ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, SHARE_NBR, OPEN_DATE ORDER BY XPTIMESTAMP DESC, closed asc) rownum
+
+--    FROM #temp150
+--	WHERE 
+--	CAST(XPTIMESTAMP AS DATE) <= CAST(@timestampvar AS DATE)
+--	)a WHERE a.rownum = 1
+
+
+
+
+
+DROP TABLE IF exists #temp250
+
+SELECT * INTO #temp250 FROM (
+
+SELECT distinct *,CASE WHEN DATEPART(WEEKDAY,DATEADD(HOUR,-6, XPTIMESTAMP)) = 7 THEN LAST_CUST_CONT_DATE ELSE CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) END testdate,
+           ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, SHARE_NBR, OPEN_DATE ORDER BY XPTIMESTAMP DESC, closed asc) rownum
+
+    FROM #temp150
+	WHERE 
+	--CASE WHEN DATEPART(WEEKDAY,DATEADD(HOUR,-6, XPTIMESTAMP)) = 7 AND CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) = EOMONTH(DATEADD(HOUR,-6, XPTIMESTAMP))  THEN LAST_CUST_CONT_DATE ELSE CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) END  <= @PROCESSDATE
+	 XPTIMESTAMP <= @timestampvar
+	)a WHERE a.rownum = 1 --AND a.MEMBER_NBR = 47235 AND a.SHARE_NBR = 11
+
+DROP TABLE IF EXISTS #MEMBERINFO
+
+SELECT * INTO #MEMBERINFO FROM (
+
+SELECT Distinct * FROM dw1.dbo.Fact_History_Member_Status
+
+)a
+
+DROP TABLE IF EXISTS #certificate
+
+SELECT * INTO #certificate FROM (
+SELECT 
+
+MEMBER_NBR
+,SHARE_NBR
+,MAT_DATE
+,ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, SHARE_NBR ORDER BY XPTIMESTAMP DESC) rownum
+
+FROM XP2_Daily_ODS_New.DB2INST1.CERTIFICATE WHERE CASE WHEN DATEPART(WEEKDAY,DATEADD(HOUR,-6, XPTIMESTAMP)) = 7  THEN DATEADD(HOUR,42,DATEADD(HOUR,-6, XPTIMESTAMP)) ELSE CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) END <= @ProcessDate
+)a WHERE a.rownum = 1
+
+
+DROP TABLE IF EXISTS #sharehistory
+
+SELECT * INTO #sharehistory FROM (
+
+SELECT * FROM DW1.dbo.Fact_History_Share_Status
+
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevMonth
+
+SELECT * INTO #viewHistoryPrevMonth FROM (
+
+SELECT distinct a.* , ROW_NUMBER() OVER (PARTITION BY a.[MEMBER NUMBER], a.SHARE_NBR ORDER BY a.AS_OF_DATE desc) rownum FROM DW1.dbo.view_Deposit_Dashboards a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVMONTHEND
+WHERE b.ASOFDATE = @ProcessDate
+)a WHERE rownum = 1
+
+DROP TABLE IF EXISTS #viewHistoryPrevQtr
+
+SELECT * INTO #viewHistoryPrevQtr FROM (
+
+SELECT a.* FROM DW1.dbo.view_Deposit_Dashboards a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVQTREND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevYe
+
+SELECT * INTO #viewHistoryPrevYe FROM (
+
+SELECT a.* FROM DW1.dbo.view_Deposit_Dashboards a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVYEND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+
+DROP TABLE IF EXISTS #closereason
+
+SELECT * INTO #closereason FROM (
+SELECT 
+		[SHARE_NBR]
+      ,[MEMBER_NBR]
+     
+      ,[VALUELIST_ITEM_DESCRIPTION]
+
+	  , ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, SHARE_NBR ORDER BY XPTIMESTAMP DESC) rownum
+      
+  FROM [XP2_Daily_ODS_New].[DB2INST1].[SHAREPROPERTY] WHERE ITEM_NAME = \'OXCLOSECODE\' AND CAST(DATEADD(HOUR,-6,XPTIMESTAMP) AS DATE) <= @ProcessDate
+  )a WHERE a.rownum = 1
+
+DELETE FROM DW1.dbo.view_Deposit_Dashboards WHERE AS_OF_DATE = @ProcessDate
+
+INSERT INTO DW1.dbo.view_Deposit_Dashboards
+( 
+    [AS_OF_DATE]
+      ,[MEMBER NUMBER]
+      ,[SHARE_NBR]
+      ,[OPEN_DATE]
+      ,[OPEN_AMT]
+      ,[OPEN_BY_OPR_NBR]
+      ,[CLOSE_DATE]
+      ,[CLOSED]
+      ,[STATUS]
+      ,[BALANCE]
+      ,[NEGATIVE_BALANCE_DATE]
+      ,[NEGATIVE_BALANCE_DAYS]
+      ,[CLASS]
+      ,[CUSTODIAL]
+      ,[DEP_CNT_YTD]
+      ,[LAST_ATM_WITH_DATE]
+      ,[LAST_RCD_CNT]
+      ,[MONTHLY_ACTIVITY_FLAG]
+      ,[MONTHLY_EFT_FLAG]
+      ,[REOPENED]
+      ,[REOPEN_AT_BRANCH_NBR]
+      ,[REOPEN_BY_OPR_NBR]
+      ,[RP_TYPE]
+      ,[SHARE_TYPE]
+      ,[SHARE_TYPE_CHNG_DATE]
+      ,[STOP_PAY_CNT]
+      ,[TIN]
+      ,[TITLE]
+      ,[WOFF]
+      ,[LAST_AVAIL_BAL]
+      ,[LAST_CUST_CONT_DATE]
+      ,[NEGATIVE_BAL_LIMIT]
+      ,[NEGATIVE_BALANCE_REASON_DESC]
+      ,[IS_BUSINESS_ACCT]
+      ,[IS_CERTIFICATE]
+      ,[IS_HSA_ACCOUNT]
+      ,[IS_OVERDRAFT_OPT_IN]
+      ,[DATA SOURCE]
+      ,[CLOSE REASON]
+      ,[MEMBER TIN]
+      ,[PREV MONTH BALANCE]
+      ,[PREV MONTH STATUS]
+      ,[MEMBER AGE]
+      ,[PREV QTR STATUS]
+      ,[PREV QTR BALANCE]
+      ,[PREV YE STATUS]
+      ,[PREV YE BALANCE]
+      ,[MEMBER BRANCH]
+      ,[MEMBER PREV BRANCH]
+      ,[MATURITY DATE]
+)
+
+
+SELECT 
+		DISTINCT
+       a.[ASOFDATE]
+      ,a.[MEMBER_NBR]
+      ,a.[SHARE_NBR]
+	  ,a.[OPEN_DATE]
+	  ,b.OPEN_AMT
+	  ,b.OPEN_BY_OPR_NBR
+	  ,a.[CLOSE_DATE]
+	  ,a.CLOSED
+	  ,a.[STATUS]
+	  
+	  ,CASE WHEN a.status = \'OPEN\' THEN a.[BALANCE] ELSE 0.00 END [BALANCE]
+	  ,b.NEGATIVE_BALANCE_DATE
+	  ,b.NEGATIVE_BALANCE_DAYS
+	  ,b.CLASS
+	  ,b.CUSTODIAL
+	  ,b.DEP_CNT_YTD
+	  
+	  ,b.LAST_ATM_WITH_DATE
+	  ,b.LAST_RCD_CNT
+	  ,b.MONTHLY_ACTIVITY_FLAG
+	  ,b.MONTHLY_EFT_FLAG
+	  ,b.REOPENED
+	  ,b.REOPEN_AT_BRANCH_NBR
+	  ,b.REOPEN_BY_OPR_NBR
+	  ,b.RP_TYPE
+      ,a.[SHARE_TYPE]
+	  ,b.SHARE_TYPE_CHNG_DATE
+	  ,b.STOP_PAY_CNT
+	 
+	  ,MI.TIN
+	  ,b.TITLE
+	  
+	  ,b.WOFF
+	  
+	  ,b.LAST_AVAIL_BAL
+	  ,b.LAST_CUST_CONT_DATE
+	  ,b.NEGATIVE_BAL_LIMIT
+	  ,b.NEGATIVE_BALANCE_REASON_DESC
+	
+	  ,b.IS_BUSINESS_ACCT
+	  ,b.IS_CERTIFICATE
+	  ,b.IS_HSA_ACCOUNT
+	  
+	  ,b.IS_OVERDRAFT_OPT_IN
+	  
+	  ,\'XP2\' [DATA SOURCE]
+	  ,
+	   CASE
+		WHEN a.CLOSED = -1 THEN c.VALUELIST_ITEM_DESCRIPTION 
+		ELSE 
+		NULL
+		END [CLOSE REASON]
+	  ,MI.TIN
+	  ,lm.BALANCE [PREV MONTH BALANCE]
+	  ,lm.STATUS [PREV MONTH STATUS]
+	  ,DATEDIFF(yyyy,mi.BIRTH_DATE, a.ASOFDATE) [Member AGE] --need to find this from member data
+	  
+	  ,pq.STATUS [PREV QTR STATUS]
+	  ,CASE WHEN PQ.STATUS = \'OPEN\' THEN pq.BALANCE ELSE 0.00 END [PREV QTR BALANCE]
+	  ,ye.STATUS [PREV YE STATUS]
+	  ,CASE WHEN YE.STATUS = \'OPEN\' THEN YE.BALANCE ELSE 0.00 END [PREV YE BALANCE]
+	  ,MI.MEMBER_BRANCH [MEMBER BRANCH]
+	  ,NULL [MEMBER PREV BRANCH]
+	  ,ct.MAT_DATE [Maturity Date]
+
+      
+     
+      
+     
+      
+   --   ,a.[XPTIMESTAMP]
+	  --,mi.MEMBER_NBR
+	  --,MI.INDIVIDUAL_ID
+  FROM #sharehistory a
+  JOIN #temp250 b ON a.MEMBER_NBR = b.MEMBER_NBR AND a.SHARE_NBR = b.SHARE_NBR AND a.OPEN_DATE = b.OPEN_DATE AND CAST(a.XPTIMESTAMP AS DATE) = CAST(b.XPTIMESTAMP AS DATE)
+  LEFT JOIN #closereason c ON a.MEMBER_NBR = c.MEMBER_NBR AND a.SHARE_NBR = c.SHARE_NBR
+  LEFT JOIN ReferenceTables.dbo.Dim_FileDate d ON @ProcessDate = d.ASOFDATE
+  LEFT JOIN #viewHistoryPrevMonth lm ON a.MEMBER_NBR = lm.[MEMBER NUMBER] AND a.SHARE_NBR = lm.SHARE_NBR AND a.OPEN_DATE = lm.OPEN_DATE AND CAST(d.PREVMONTHEND AS DATE) = CAST(lm.AS_OF_DATE AS DATE)
+  LEFT JOIN #viewHistoryPrevQtr pq ON a.MEMBER_NBR = pq.[MEMBER NUMBER] AND a.SHARE_NBR = pq.SHARE_NBR AND a.OPEN_DATE = pq.OPEN_DATE AND CAST(d.PREVQTREND AS DATE) = CAST(pq.AS_OF_DATE AS DATE)
+  LEFT JOIN #viewHistoryPrevYe ye ON a.MEMBER_NBR = ye.[MEMBER NUMBER] AND a.SHARE_NBR = ye.SHARE_NBR AND a.OPEN_DATE = ye.OPEN_DATE AND CAST(d.PREVYEND AS DATE) = CAST(ye.AS_OF_DATE AS DATE)
+  LEFT JOIN #certificate ct ON a.MEMBER_NBR = ct.MEMBER_NBR AND a.SHARE_NBR = ct.SHARE_NBR
+  LEFT JOIN #MEMBERINFO MI ON A.MEMBER_NBR = MI.MEMBER_NBR AND a.ASOFDATE = mi.ASOFDATE
+  ----LEFT JOIN XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL IND ON mi.INDIVIDUAL_ID = ind.INDIVIDUAL_ID AND CAST(mi.XPTIMESTAMP AS DATE) = CAST(ind.XPTIMESTAMP AS DATE)
+  WHERE a.ASOFDATE = @ProcessDate --AND a.MEMBER_NBR = 1055
+
+    SET @Maxrownum = @Maxrownum - 1;
+END;
+  
+''' Timeout: 5000 Result=> QueryResult5
+/# Update view_Deposit_Summary
+#/
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp11;
+SELECT * INTO #temp11 FROM (
+SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
+WHERE asofdate >=\'2024-12-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM DW1.dbo.view_Deposit_Dashboards WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
+GROUP BY ASOFDATE
+)a
+
+
+
+DECLARE @timestampvar datetime 
+
+DROP TABLE IF EXISTS #purged_3
+
+SELECT * INTO #purged_3 FROM (
+
+SELECT * FROM DW1.dbo.Dim_Purged_Accts
+
+)a
+
+DROP TABLE IF EXISTS #temp155
+
+SELECT DISTINCT
+
+
+*
+	   
+	  INTO #temp155 FROM (
+
+SELECT * FROM
+	
+				XP2_MonthEnd_ODS.DB2INST1.SHARE
+				
+				UNION
+		SELECT * FROM
+	
+				XP2_Daily_ODS_New.DB2INST1.SHARE
+				
+
+)a
+
+
+DECLARE @Maxrownum INT =
+        (
+            SELECT COUNT(ASOFDATE)FROM #temp11
+        );
+
+DECLARE @ProcessDate DATE;
+
+DECLARE @LastRow INT = 1;
+
+WHILE @Maxrownum >= @LastRow
+BEGIN
+
+    SET @ProcessDate =
+    (
+        SELECT ASOFDATE FROM #temp11 WHERE rownum = @Maxrownum GROUP BY ASOFDATE
+    );
+
+	
+
+
+SET @timestampvar = 
+(SELECT MAX(xptimestamp) xptimestamp FROM DW1.dbo.Dim_BatchProcess WHERE FileDate <= @ProcessDate)
+
+
+DROP TABLE IF EXISTS #temp255
+
+--SELECT * INTO #temp250 FROM (
+
+--SELECT DISTINCT *,
+--           ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, SHARE_NBR, OPEN_DATE ORDER BY XPTIMESTAMP DESC, closed asc) rownum
+
+--    FROM #temp150
+--	WHERE 
+--	CAST(XPTIMESTAMP AS DATE) <= CAST(@timestampvar AS DATE)
+--	)a WHERE a.rownum = 1
+
+DROP TABLE IF exists #temp255
+
+SELECT * INTO #temp255 FROM (
+
+SELECT distinct *,CASE WHEN DATEPART(WEEKDAY,DATEADD(HOUR,-6, XPTIMESTAMP)) = 7 THEN LAST_CUST_CONT_DATE ELSE CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) END testdate,
+           ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, SHARE_NBR, OPEN_DATE ORDER BY XPTIMESTAMP DESC, closed asc) rownum
+
+    FROM #temp155
+	WHERE 
+	--CASE WHEN DATEPART(WEEKDAY,DATEADD(HOUR,-6, XPTIMESTAMP)) = 7 AND CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) = EOMONTH(DATEADD(HOUR,-6, XPTIMESTAMP))  THEN LAST_CUST_CONT_DATE ELSE CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) END  <= @PROCESSDATE
+	 XPTIMESTAMP <= @timestampvar
+	)a WHERE a.rownum = 1 --AND a.MEMBER_NBR = 47235 AND a.SHARE_NBR = 11
+
+DROP TABLE IF EXISTS #MEMBERINFO
+
+SELECT * INTO #MEMBERINFO FROM (
+
+SELECT * FROM dw1.dbo.Fact_History_Member_Status
+
+)a
+
+DROP TABLE IF EXISTS #certificate
+
+SELECT * INTO #certificate FROM (
+SELECT 
+
+MEMBER_NBR
+,SHARE_NBR
+,MAT_DATE
+,ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, SHARE_NBR ORDER BY XPTIMESTAMP DESC) rownum
+
+FROM XP2_Daily_ODS_New.DB2INST1.CERTIFICATE WHERE CASE WHEN DATEPART(WEEKDAY,DATEADD(HOUR,-6, XPTIMESTAMP)) = 7  THEN DATEADD(HOUR,42,DATEADD(HOUR,-6, XPTIMESTAMP)) ELSE CAST(DATEADD(HOUR,-6, XPTIMESTAMP) AS DATE) END <= @ProcessDate
+)a WHERE a.rownum = 1
+
+
+DROP TABLE IF EXISTS #sharehistory
+
+SELECT * INTO #sharehistory FROM (
+
+SELECT * FROM DW1.dbo.Fact_History_Share_Status
+
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevMonth
+
+SELECT * INTO #viewHistoryPrevMonth FROM (
+
+SELECT distinct a.* , ROW_NUMBER() OVER (PARTITION BY a.[MEMBER NUMBER], a.SHARE_NBR ORDER BY a.AS_OF_DATE desc) rownum FROM DW1.dbo.view_Deposit_Dashboards a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVMONTHEND
+WHERE b.ASOFDATE = @ProcessDate
+)a WHERE rownum = 1
+
+DROP TABLE IF EXISTS #viewHistoryPrevQtr
+
+SELECT * INTO #viewHistoryPrevQtr FROM (
+
+SELECT a.* FROM DW1.dbo.view_Deposit_Dashboards a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVQTREND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevYe
+
+SELECT * INTO #viewHistoryPrevYe FROM (
+
+SELECT a.* FROM DW1.dbo.view_Deposit_Dashboards a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVYEND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+
+DROP TABLE IF EXISTS #closereason
+
+SELECT * INTO #closereason FROM (
+SELECT 
+		[SHARE_NBR]
+      ,[MEMBER_NBR]
+     
+      ,[VALUELIST_ITEM_DESCRIPTION]
+
+	  , ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, SHARE_NBR ORDER BY XPTIMESTAMP DESC) rownum
+      
+  FROM [XP2_Daily_ODS_New].[DB2INST1].[SHAREPROPERTY] WHERE ITEM_NAME = \'OXCLOSECODE\' AND CAST(DATEADD(HOUR,-6,XPTIMESTAMP) AS DATE) <= @ProcessDate
+  )a WHERE a.rownum = 1
+
+DELETE FROM DW1.dbo.view_Deposit_Summary WHERE ASOFDATE = @ProcessDate
+
+INSERT INTO DW1.dbo.view_Deposit_Summary
+(
+    [ASOFDATE]
+      ,[BALANCE]
+      ,[MEMBER BRANCH]
+      ,[CLASS]
+      ,[CLOSE REASON]
+      ,[CLOSE_DATE]
+      ,[CLOSED]
+      ,[CURRQTREND]
+      ,[CUSTODIAL]
+      ,[DATA SOURCE]
+      ,[DEP_CNT_YTD]
+      ,[IS_BUSINESS_ACCT]
+      ,[IS_CERTIFICATE]
+      ,[IS_HSA_ACCOUNT]
+      ,[IS_OVERDRAFT_OPT_IN]
+      ,[LAST_AVAIL_BAL]
+      ,[LAST_ATM_WITH_DATE]
+      ,[LAST_RCD_CNT]
+      ,[LAST_CUST_CONT_DATE]
+      ,[MEMBER AGE]
+      ,[MEMBER NUMBER]
+      ,[MEMBER TIN]
+      ,[MONTHLY_ACTIVITY_FLAG]
+      ,[MONTHLY_EFT_FLAG]
+      ,[NEG_BAL_CNT_LAST_30_DAYS]
+      ,[NEGATIVE_BAL_LIMIT]
+      ,[NEGATIVE_BALANCE_DATE]
+      ,[NEGATIVE_BALANCE_DAYS]
+      ,[NEGATIVE_BALANCE_REASON_DESC]
+      ,[OPEN_AMT]
+      ,[OPEN_BY_OPR_NBR]
+      ,[OPEN_DATE]
+      ,[OVERDRAFT_OPT_IN_DATE]
+      ,[PREV MONTH BALANCE]
+      ,[PREV MONTH STATUS]
+      ,[PREV QTR STATUS]
+      ,[PREV QTR BALANCE]
+      ,[PREV YE STATUS]
+      ,[PREV YE BALANCE]
+      ,[REOPENED]
+      ,[REOPEN_AT_BRANCH_NBR]
+      ,[REOPEN_BY_OPR_NBR]
+      ,[RP_TYPE]
+      ,[SHARE_NBR]
+      ,[SHARE_TYPE]
+      ,[SHARE_TYPE_CHNG_DATE]
+      ,[STATUS]
+      ,[STOP_PAY_CNT]
+      ,[TIN]
+      ,[TITLE]
+      ,[WOFF]
+)
+
+
+SELECT 
+		Distinct
+       a.[ASOFDATE]
+	   
+	   ,Case WHEN a.status = \'OPEN\' THEN a.[BALANCE] ELSE 0.00 END [BALANCE]
+	   ,MI.MEMBER_BRANCH [MEMBER BRANCH]
+	   ,b.CLASS
+    ,
+	   CASE
+		WHEN a.CLOSED = -1 THEN c.VALUELIST_ITEM_DESCRIPTION 
+		ELSE 
+		NULL
+		END [CLOSE REASON]
+		,a.[CLOSE_DATE]
+	  ,a.CLOSED
+	   ,d.CURRQTREND
+	  ,b.CUSTODIAL
+	    ,\'XP2\' [DATA SOURCE]
+	    ,b.DEP_CNT_YTD
+		 ,b.IS_BUSINESS_ACCT
+	  ,b.IS_CERTIFICATE
+	  ,b.IS_HSA_ACCOUNT
+	  ,b.IS_OVERDRAFT_OPT_IN
+		,b.LAST_AVAIL_BAL
+		 ,b.LAST_ATM_WITH_DATE
+	  ,b.LAST_RCD_CNT
+	  ,b.LAST_CUST_CONT_DATE
+	   ,DATEDIFF(yyyy,mi.BIRTH_DATE, a.ASOFDATE) [MEMBER AGE]
+      ,a.[MEMBER_NBR] [MEMBER NUMBER]
+	  ,MI.TIN [MEMBER TIN]
+	   ,b.MONTHLY_ACTIVITY_FLAG
+	  ,b.MONTHLY_EFT_FLAG
+	  ,b.NEG_BAL_CNT_LAST_30_DAYS
+	  ,b.NEGATIVE_BAL_LIMIT
+      ,b.NEGATIVE_BALANCE_DATE
+	  ,b.NEGATIVE_BALANCE_DAYS
+	  ,b.NEGATIVE_BALANCE_REASON_DESC
+	  ,b.OPEN_AMT
+	  ,b.OPEN_BY_OPR_NBR
+	  ,a.[OPEN_DATE]
+	  ,b.OVERDRAFT_OPT_IN_DATE
+	   ,Case WHEN lm.status = \'OPEN\' THEN lm.BALANCE ELSE 0.00 END [PREV MONTH BALANCE]
+	  ,lm.STATUS [PREV MONTH STATUS]
+	   ,pq.STATUS [PREV QTR STATUS]
+	  ,Case WHEN pq.status = \'OPEN\' THEN pq.BALANCE ELSE 0.00 END [PREV QTR BALANCE]
+	  ,ye.STATUS [PREV YE STATUS]
+	  ,YE.BALANCE [PREV YE BALANCE]
+	  ,b.REOPENED
+	  ,b.REOPEN_AT_BRANCH_NBR
+	  ,b.REOPEN_BY_OPR_NBR
+	  ,b.RP_TYPE
+	  ,a.[SHARE_NBR]
+	  ,a.[SHARE_TYPE]
+	  ,b.SHARE_TYPE_CHNG_DATE
+	  ,a.[STATUS]
+	  ,b.STOP_PAY_CNT
+	  ,b.TIN [TIN]
+	  ,b.TITLE
+	  ,b.WOFF
+  FROM #sharehistory a
+  JOIN #temp255 b ON a.MEMBER_NBR = b.MEMBER_NBR AND a.SHARE_NBR = b.SHARE_NBR AND a.OPEN_DATE = b.OPEN_DATE AND CAST(a.XPTIMESTAMP AS DATE) = CAST(b.XPTIMESTAMP AS DATE)
+  LEFT JOIN #closereason c ON a.MEMBER_NBR = c.MEMBER_NBR AND a.SHARE_NBR = c.SHARE_NBR
+  LEFT JOIN ReferenceTables.dbo.Dim_FileDate d ON @ProcessDate = d.ASOFDATE
+  LEFT JOIN #viewHistoryPrevMonth lm ON a.MEMBER_NBR = lm.[MEMBER NUMBER] AND a.SHARE_NBR = lm.SHARE_NBR AND a.OPEN_DATE = lm.OPEN_DATE AND CAST(d.PREVMONTHEND AS DATE) = CAST(lm.AS_OF_DATE AS DATE)
+  LEFT JOIN #viewHistoryPrevQtr pq ON a.MEMBER_NBR = pq.[MEMBER NUMBER] AND a.SHARE_NBR = pq.SHARE_NBR AND a.OPEN_DATE = pq.OPEN_DATE AND CAST(d.PREVQTREND AS DATE) = CAST(pq.AS_OF_DATE AS DATE)
+  LEFT JOIN #viewHistoryPrevYe ye ON a.MEMBER_NBR = ye.[MEMBER NUMBER] AND a.SHARE_NBR = ye.SHARE_NBR AND a.OPEN_DATE = ye.OPEN_DATE AND CAST(d.PREVYEND AS DATE) = CAST(ye.AS_OF_DATE AS DATE)
+  LEFT JOIN #certificate ct ON a.MEMBER_NBR = ct.MEMBER_NBR AND a.SHARE_NBR = ct.SHARE_NBR
+  LEFT JOIN #MEMBERINFO MI ON A.MEMBER_NBR = MI.MEMBER_NBR AND a.ASOFDATE = mi.ASOFDATE
+  --LEFT JOIN XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL IND ON mi.INDIVIDUAL_ID = ind.INDIVIDUAL_ID AND CAST(mi.XPTIMESTAMP AS DATE) = CAST(ind.XPTIMESTAMP AS DATE)
+  WHERE a.ASOFDATE = @ProcessDate --AND a.MEMBER_NBR = 1055
+
+    SET @Maxrownum = @Maxrownum - 1;
+END;
+  
+''' Timeout: 1200 Result=> QueryResult5
+/# Update view_Loan_Dashboard
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp11;
+SELECT * INTO #temp11 FROM (
+SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE DESC) rownum FROM ReferenceTables.dbo.Dim_FileDate
+WHERE asofdate >=\'2024-10-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM DW1.dbo.view_Loan_Dashboards WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
+GROUP BY ASOFDATE
+)a
+
+DECLARE @timestampvar datetime 
+
+DROP TABLE IF EXISTS #temp160
+
+SELECT DISTINCT   
+
+	*,
+      
+       CAST(DATEADD(HOUR, -6, a.XPTIMESTAMP) AS DATE) XPTIMESTAMP2 
+	   
+	  INTO #temp160 FROM (
+
+SELECT * FROM
+	
+				XP2_MonthEnd_ODS.DB2INST1.LOAN
+				
+				UNION
+		SELECT * FROM
+	
+				XP2_Daily_ODS_New.DB2INST1.LOAN
+				
+
+)a
+
+DECLARE @Maxrownum INT =
+        (
+            SELECT COUNT(ASOFDATE)FROM #temp11
+        );
+
+DECLARE @ProcessDate DATE;
+
+DECLARE @LastRow INT = 1;
+
+WHILE @Maxrownum >= @LastRow
+BEGIN
+
+    SET @ProcessDate =
+    (
+        SELECT ASOFDATE FROM #temp11 WHERE rownum = @Maxrownum GROUP BY ASOFDATE
+    );
+
+SET @timestampvar = 
+(SELECT MAX(xptimestamp) xptimestamp FROM DW1.dbo.Dim_BatchProcess WHERE FileDate <= @ProcessDate)
+
+DROP TABLE IF EXISTS #LOANS
+SELECT * INTO #LOANS FROM (
+SELECT *, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, LOAN_NBR ORDER BY XPTIMESTAMP DESC)ROWNNUM  FROM #temp160
+WHERE XPTIMESTAMP <= @timestampvar)A WHERE A.ROWNNUM = 1
+
+DROP TABLE IF EXISTS #MEMBERINFO_Loan
+
+SELECT * INTO #MEMBERINFO_Loan FROM (
+
+SELECT * FROM dw1.dbo.Fact_History_Member_Status WHERE ASOFDATE = @processdate
+
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevMonth_Loan
+
+SELECT * INTO #viewHistoryPrevMonth_Loan FROM (
+
+SELECT a.* FROM DW1.dbo.view_Loan_Dashboards a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVMONTHEND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevQtr_Loan
+
+SELECT * INTO #viewHistoryPrevQtr_Loan FROM (
+
+SELECT a.* FROM DW1.dbo.view_Loan_Dashboards a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVQTREND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevYe_Loan
+
+SELECT * INTO #viewHistoryPrevYe_Loan FROM (
+
+SELECT a.* FROM DW1.dbo.view_Loan_Dashboards a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVYEND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+DROP TABLE IF EXISTS #loanhistory
+
+SELECT * INTO #loanhistory FROM (
+
+SELECT * FROM DW1.dbo.Fact_History_Loan_Status
+
+)a
+
+DROP TABLE IF EXISTS #filedate_Loan
+
+SELECT * INTO #filedate_Loan FROM (
+
+SELECT * FROM ReferenceTables.dbo.Dim_FileDate WHERE ASOFDATE = @PROCESSDATE
+
+)a
+
+DELETE FROM dw1.dbo.view_Loan_Dashboards WHERE AS_OF_DATE = @PROCESSDATE
+
+INSERT INTO dw1.dbo.view_Loan_Dashboards
+
+SELECT distinct
+	a.ASOFDATE
+	,a.MEMBER_NBR [MEMBER NUMBER]
+	,a.LOAN_NBR [LOAN NUMBER]
+	,a.OPEN_DATE [OPEN DATE]
+	,a.LOAN_TYPE [LOAN TYPE]
+	,b.[Desc] [DESCRIPTION]
+	,b.[Loan Code] [LOAN CODE]
+	,b.Category [LOAN CATEGORY]
+	,c.ORIG_TERM [ORIG TERM]
+	,c.MONTHLY_TERM [MONTHLY TERM]
+	,c.DELQ_NBR_PMTS [PMTS PAST DUE]
+	,\'\' [MONTHS PAST DUE]
+	,CASE WHEN a.WOFF_DATE IS NULL THEN a.BALANCE ELSE 0 END BALANCE
+	,dl.DAYSDEL [DAYS DELINQUENT]
+	,C.BRANCH_NBR [BRANCH]
+	,C.CLASS
+	,C.CLASSIFICATION_CODE [CLASS CODE]
+	,C.CLOSE_DATE [CLOSE DATE]
+	,C.CLOSED
+	,C.CREDIT_SCORE
+	,C.[DELQ_AMT] [DEL AMT]
+	,C.IS_DELQ [IS DELQ]
+	,a.IS_WRITTEN_OFF [IS_CO]
+	,C.HIGHEST_BAL [HIGHEST BALANCE]
+	,C.HIGHEST_BAL_DATE [HIGHEST BALANCE DATE]
+	,C.HAS_COBORROWERS [COBORROWER]
+	,C.FINAL_PMT_DATE [FINAL PMT DATE]
+	,C.FINAL_PMT_AMT [FINAL PMT AMOUNT]
+	,C.HISTORY_CNT [HISTORY COUNT]
+	,C.LAST_STMT_BAL [LAST STMT BALANCE]
+	,C.HISTORY_LAST_SEQ [HIST LAST SEQ]
+	,C.INACTIVE [INTACTIVE]
+	,C.INCOL [INCOL]
+	,C.INCOL_DATE [INCOL DATE]
+	,C.MIN_PMT [MIN PMT]
+	,C.IS_CREDIT_CARD [IS_CC]
+	,a.LIMIT 
+	,C.LOAN_NOTE_NBR [LOAN NOTE NBR]
+	,C.LOAN_TYPE_CHNG_DATE [LOAN TYPE CHNG DATE]
+	,C.NEXT_DUE_DATE [NEXT DUE DATE]
+	,C.NOT_BOOKED [NOT BOOKED]
+	,C.OFFICER [OFFICER]
+	,C.ORIG_AMT [ORIG AMOUNT]
+	,C.ORIG_LN_TYPE [ORIGINAL LN TYPE] --NEED TO FIND THIS
+	,C.PMT_HISTORY [PMT HISTORY]
+	,C.RATE
+	,C.REOPEN_DATE [REOPEN DATE]
+	,CASE WHEN C.REOPEN_DATE IS NOT NULL THEN -1 ELSE 0 END [IS_REOPENED]
+	,C.SCHEDULED_PMT [SCHEDULE PMT]
+	,C.TITLE
+	,\'\' [CLOSE REASON]
+	,a.WOFF_AMOUNT [CO AMOUNT]
+	,CASE WHEN a.IS_WRITTEN_OFF = -1 THEN a.BALANCE ELSE 0 END [CO BALANCE]
+	,a.WOFF_DATE [CO DATE]
+	,a.WOFF_TOT_RECOV_AMT [CO RECOVERY]
+	,d.CURRMONTHEND CURRMONTHEND
+	,d.CURRQTREND CURRQTREND
+	,\'XP2\' [DATA SOURCE]
+	,d.CURRYEND CURRYEND
+	,\'\' [EVER 30]
+	,\'\' [EVER 60]
+	,\'\' [EVER 90]
+	,C.FIRST_PMT_NOT_MADE [FIRST PAY DEFAULT]
+	,C.FIRST_PMT_NOT_MADE_CNV [FIRST PAY DEFAULT CNV]
+	,C.FIRST_PMT_DATE [FIRST PAYMENT DATE]
+	,C.INT_DUE [INT DUE]
+	,C.IS_BALLOON_PAYOFF [IS BALLOON PAYOFF]
+	,C.IS_BUSINESS_LOAN [IS BUSINESS LOAN]
+	,C.IS_OPEN_ENDED [IS OPEN ENDED]
+	,NULL [LAST BALANCE DATE]
+	,C.LAST_PAYMENT_DATE [LAST PAYMENT DATE]
+	,C.LAST_REFINANCE_DATE [LAST REFI DATE]
+	,NULL [MAX LOAN BALANCE]
+	,DATEDIFF(yyyy,mi.BIRTH_DATE, a.ASOFDATE) [MEMBER AGE]
+	,MI.BRANCH_NBR [MEMBER BRANCH]
+	,\'\' [MEMBER PREV BRANCH] --NEED TO FIND THIS
+	,mi.TIN [MEMBER TIN]
+	,C.OPEN_END_CATEGORY [OPEN END CATEGORY]
+	,C.ORIGINAL_CREDIT_SCORE [ORIGINAL CREDIT SCORE]
+	,C.ORIGINAL_LTV [ORIGINAL LTV]
+	,C.ORIG_TERM [ORIGINAL TERM]
+	,NULL [PARTICIPATION PERCENT]
+	,C.PORTFOLIO_TYPE [PORTFOLIO TYPE]
+	,lm.BALANCE [PREV MONTH BALANCE]
+	,LM.STATUS [PREV MONTH STATUS]
+	,pq.BALANCE [PREV QTR BALANCE]
+	,PQ.STATUS [PREV QTR STATUS]
+	,ye.BALANCE [PREV YE BALANCE]
+	,ye.STATUS [PREV YE STATUS]
+	,d.PREVDATE
+	,d.PREVMONTHEND
+	,d.PREVQTREND
+	,d.PREVYEND
+	,C.PRIN_AT_PAYOFF [PRINCIPLE AT PAYOFF]
+	,C.REFINANCE_COUNT [REFINANCE COUNT]
+	,a.STATUS
+	,\'\' [STUDENT_MEMBER_STATUS]
+	
+
+
+	
+    
+  FROM [DW1].[dbo].[Fact_History_Loan_Status] a
+  
+  LEFT JOIN dw1.dbo.dim_LoanType b ON CAST(a.LOAN_TYPE AS BIGINT) = CAST(b.[Loan Type] AS BIGINT)
+  LEFT JOIN #LOANS C ON CAST(A.MEMBER_NBR AS bigint) = CAST(C.MEMBER_NBR AS bigint) AND CAST(A.LOAN_NBR AS BIGINT) = CAST(C.LOAN_NBR AS BIGINT) AND CAST(A.OPEN_DATE AS DATE) = CAST(C.OPEN_DATE AS DATE)
+  
+  
+  LEFT JOIN (SELECT DISTINCT * FROM XP2_Daily_ODS_New.DB2INST1.AGR_LOANDELQ) dl ON a.MEMBER_NBR = dl.MEMBER_NBR AND a.LOAN_NBR = dl.LOAN_NBR and a.ASOFDATE = dl.ProcessDate
+  LEFT JOIN #filedate_Loan d ON a.ASOFDATE = d.ASOFDATE
+  LEFT JOIN #MEMBERINFO_Loan mi ON a.MEMBER_NBR = mi.MEMBER_NBR
+  LEFT JOIN #viewHistoryPrevMonth_Loan lm ON CAST(a.MEMBER_NBR AS Varchar) = CAST(lm.[MEMBER NUMBER] AS Varchar) AND CAST(a.LOAN_NBR AS Varchar) = CAST(lm.[LOAN NUMBER] AS Varchar) AND CAST(d.PREVMONTHEND AS DATE) = CAST(lm.AS_OF_DATE AS DATE) AND a.OPEN_DATE = lm.[OPEN DATE]
+  LEFT JOIN #viewHistoryPrevQtr_Loan pq ON Cast(a.MEMBER_NBR AS Varchar) = CAST(pq.[MEMBER NUMBER] AS Varchar) AND CAST(a.LOAN_NBR AS Varchar) = CAST(pq.[LOAN NUMBER] AS Varchar) AND CAST(d.PREVQTREND AS DATE) = CAST(pq.AS_OF_DATE AS DATE) AND a.OPEN_DATE = pq.[OPEN DATE]
+  LEFT JOIN #viewHistoryPrevYe_Loan ye ON CAST(a.MEMBER_NBR AS Varchar) = CAST(ye.[MEMBER NUMBER] AS Varchar) AND CAST(a.LOAN_NBR AS Varchar) = CAST(ye.[LOAN NUMBER] AS Varchar) AND CAST(d.PREVYEND AS DATE) = CAST(ye.AS_OF_DATE AS DATE) AND a.OPEN_DATE = ye.[OPEN DATE]
+  WHERE a.ASOFDATE = @ProcessDate 
+
+    SET @Maxrownum = @Maxrownum - 1;
+END;
+  
+''' Timeout: 600 Result=> QueryResult5
+/# Update view_Membership_Dashboard
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temp12;
+SELECT * INTO #temp12 FROM (
+SELECT ASOFDATE, ROW_NUMBER() OVER (ORDER BY ASOFDATE Desc) rownum FROM ReferenceTables.dbo.Dim_FileDate
+WHERE asofdate >= \'2024-10-31\' AND CAST(ASOFDATE as date) NOT IN (SELECT CAST(AS_OF_DATE AS DATE) AS_OF_DATE FROM DW1.dbo.view_MemberDashboard WHERE CAST(AS_OF_DATE AS DATE) IS NOT NULL GROUP BY AS_OF_DATE)
+GROUP BY ASOFDATE
+)a
+
+DECLARE @Maxrownum INT =
+        (
+            SELECT COUNT(ASOFDATE)FROM #temp12
+        );
+
+DECLARE @ProcessDate DATE;
+
+DECLARE @LastRow INT = 1;
+
+WHILE @Maxrownum >= @LastRow
+BEGIN
+
+    SET @ProcessDate =
+    (
+        SELECT ASOFDATE FROM #temp12 WHERE rownum = @Maxrownum GROUP BY ASOFDATE
+    );
+
+DROP TABLE IF EXISTS #MEMBERS
+SELECT * INTO #MEMBERS FROM (
+SELECT *, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY XPTIMESTAMP DESC)ROWNNUM  FROM XP2_Daily_ODS_New.DB2INST1.MEMBERSHIP
+WHERE XPTIMESTAMP <= @PROCESSDATE)A WHERE A.ROWNNUM = 1
+
+
+DROP TABLE IF EXISTS #MEMBERINFO_Member
+
+SELECT * INTO #MEMBERINFO_Member FROM (
+
+SELECT * FROM dw1.dbo.Fact_History_Member_Status WHERE ASOFDATE = @ProcessDate
+
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevMonth_Member
+
+SELECT * INTO #viewHistoryPrevMonth_Member FROM (
+
+SELECT a.* FROM DW1.dbo.View_MemberDashboard a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVMONTHEND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevQtr_Member
+
+SELECT * INTO #viewHistoryPrevQtr_Member FROM (
+
+SELECT a.* FROM DW1.dbo.View_MemberDashboard a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVQTREND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+DROP TABLE IF EXISTS #viewHistoryPrevYe_Member
+
+SELECT * INTO #viewHistoryPrevYe_Member FROM (
+
+SELECT a.* FROM DW1.dbo.View_MemberDashboard a
+JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVYEND
+WHERE b.ASOFDATE = @ProcessDate
+)a
+
+
+DROP TABLE IF EXISTS #filedate_Member
+
+SELECT * INTO #filedate_Member FROM (
+
+SELECT * FROM ReferenceTables.dbo.Dim_FileDate WHERE ASOFDATE = @PROCESSDATE
+
+)a
+
+DELETE FROM dw1.dbo.View_MemberDashboard WHERE AS_OF_DATE = @PROCESSDATE
+
+INSERT INTO dw1.dbo.View_MemberDashboard
+
+SELECT DISTINCT
+     a.ASOFDATE
+	 ,a.INDIVIDUAL_ID
+	 ,\'\' [SSN_ID]
+	 ,a.MEMBER_NBR
+	 ,a.STATUS [Member Account Status]
+	 ,CASE WHEN b.HAS_WOFF <> -1 THEN \'No Charge-off\' END [WO Status]
+	 ,c.CLS_LN_CNT 
+	 ,c.CLS_SV_CNT
+	 ,c.LN_LOC_BAL
+	 ,c.LN_LOC_CNT
+	 ,c.LN_RE_CNT
+	 ,c.LN_RE_BAL
+	 ,c.LN_REG_CNT
+	 ,c.LN_REG_BAL
+	 ,c.LN_STU_CNT
+	 ,c.LN_STU_BAL
+	 ,c.LST_LN_CLS_DATE
+	 ,c.LST_SV_CLS_DATE
+	 ,c.MAX_DAYS_DELQ_CNT
+	 ,c.MAX_MTHS_DELQ_CNT
+	 ,c.OPN_LN_ALL_CNT
+	 ,c.OPN_SV_BAL
+	 ,c.OPN_LN_CC_BAL
+	 ,c.OPN_LN_CC_CNT
+	 ,c.SV_CERT_BAL
+	 ,c.SV_SD_CNT
+	 ,c.SV_SD_BAL
+	 ,c.SV_REG_CNT
+	 ,c.SV_REG_BAL
+	 ,c.SV_CERT_CNT
+	 ,\'\'
+	 ,a.BIRTH_DATE
+	  ,a.TIN
+	 ,\'XP2\'
+	 ,\'\'
+	 ,\'\'
+	 ,\'\'
+	 ,null [Close Date]
+     ,a.STATUS
+	 ,b.OPEN_DATE
+	 ,lm.[CURRENT TIN STATUS] [PREV TIN STATUS]
+	 ,\'\' [Status Change]
+	 ,pq.[CURRENT TIN STATUS] [PREV QTR STATUS]
+	 ,ye.[CURRENT TIN STATUS] [PREV YE Status]
+	 ,d.PREVMONTHEND
+	 ,a.BRANCH_NBR [BRANCH]
+	 ,lm.BRANCH [PREV BRANCH]
+	 ,c.OPN_LN_BAL [OPEN LOAN BALANCE]
+	 ,NULL [ZIP_STR]
+	 ,d.CURRQTREND
+
+	
+	 
+
+
+	
+	
+    
+  FROM #MEMBERINFO_Member a
+  LEFT JOIN #MEMBERS b ON a.MEMBER_NBR = b.MEMBER_NBR
+  LEFT JOIN XP2_Daily_ODS_New.DB2INST1.AGR_MEMBERTOTAL c ON a.MEMBER_NBR = c.MEMBER_NBR AND a.ASOFDATE = c.ProcessDate
+  LEFT JOIN #filedate_Member d ON a.ASOFDATE = d.ASOFDATE
+  LEFT JOIN #viewHistoryPrevMonth_Member lm ON a.MEMBER_NBR = lm.[MEMBER NUMBER] AND CAST(d.PREVMONTHEND AS DATE) = CAST(lm.AS_OF_DATE AS DATE)
+  LEFT JOIN #viewHistoryPrevQtr_Member pq ON a.MEMBER_NBR = pq.[MEMBER NUMBER] AND CAST(d.PREVQTREND AS DATE) = CAST(pq.AS_OF_DATE AS DATE)
+  LEFT JOIN #viewHistoryPrevYe_Member ye ON a.MEMBER_NBR = ye.[MEMBER NUMBER] AND CAST(d.PREVYEND AS DATE) = CAST(ye.AS_OF_DATE AS DATE)
+  WHERE a.ASOFDATE = @ProcessDate 
+
+    SET @Maxrownum = @Maxrownum - 1;
+END;''' Timeout: 600 Result=> QueryResult5
+Database.Close Connection: SQLConnection
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
+Text.ConvertDateTimeToText.FromCustomDateTime DateTime: CurrentDateTime CustomFormat: $'''dd''' Result=> Dayofmonth
+Text.ToNumber Text: Dayofmonth Number=> TextAsNumber3
+IF TextAsNumber3 <= 3 THEN
+    DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS db2inst1.account
+
+SELECT * INTO db2inst1.account FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.ACCOUNT\')
+
+DROP TABLE IF EXISTS db2inst1.Application
+
+SELECT * INTO db2inst1.Application FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.APPLICATION\')
+
+DROP TABLE IF EXISTS db2inst1.applicationindividual
+
+SELECT * INTO db2inst1.applicationindividual FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.applicationindividual\')
+
+DROP TABLE IF EXISTS db2inst1.individualcbreport
+
+SELECT * INTO db2inst1.individualcbreport FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.individualcbreport\')
+
+DROP TABLE IF EXISTS db2inst1.applicationcbreport
+
+SELECT * INTO db2inst1.applicationcbreport FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.applicationcbreport\')
+
+DROP TABLE IF EXISTS db2inst1.CBREPORT
+
+
+SELECT * INTO db2inst1.CBREPORT FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.CBREPORT\')
+
+DROP TABLE IF EXISTS db2inst1.cbreportcbsummaryreport
+
+
+SELECT * INTO db2inst1.cbreportcbsummaryreport FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.cbreportcbsummaryreport\')
+
+DROP TABLE IF EXISTS db2inst1.cbscore
+
+
+SELECT * INTO db2inst1.cbscore FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.cbscore\')
+
+DROP TABLE IF EXISTS db2inst1.cbriskmodel
+
+
+SELECT * INTO db2inst1.cbriskmodel FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.cbriskmodel\')
+
+DROP TABLE IF EXISTS db2inst1.loan
+
+SELECT * INTO db2inst1.loan FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.loan\')
+
+DROP TABLE IF EXISTS db2inst1.membership
+
+SELECT * INTO db2inst1.membership FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.membership\')
+
+DROP TABLE IF EXISTS db2inst1.agr_loandelq
+
+SELECT * INTO db2inst1.agr_loandelq FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.agr_loandelq\')
+
+DROP TABLE IF EXISTS db2inst1.individual
+
+SELECT * INTO db2inst1.individual FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.individual\')
+
+DROP TABLE IF EXISTS db2inst1.realestateloan
+
+SELECT * INTO db2inst1.realestateloan FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.realestateloan\')
+
+DROP TABLE IF EXISTS db2inst1.address
+
+SELECT * INTO db2inst1.address FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.address\')
+
+
+DROP TABLE IF EXISTS db2inst1.prebookloan
+
+SELECT * INTO db2inst1.prebookloan FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.prebookloan\')
+
+DROP TABLE IF EXISTS db2inst1.loanproperty
+
+SELECT * INTO db2inst1.loanproperty FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.loanproperty\')
+
+DROP TABLE IF EXISTS db2inst1.individualproperty
+
+SELECT * INTO db2inst1.individualproperty FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.individualproperty\')
+
+DROP TABLE IF EXISTS db2inst1.applicationcollateral
+
+SELECT * INTO db2inst1.applicationcollateral FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.applicationcollateral\')
+
+DROP TABLE IF EXISTS db2inst1.assetvehicle
+
+SELECT * INTO db2inst1.assetvehicle FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.assetvehicle\')
+
+DROP TABLE IF EXISTS db2inst1.assetrealestate
+
+SELECT * INTO db2inst1.assetrealestate FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.assetrealestate\')
+
+DROP TABLE IF EXISTS db2inst1.loancollateral
+
+SELECT * INTO db2inst1.loancollateral FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.loancollateral\')
+
+DROP TABLE IF EXISTS db2inst1.collateral
+
+SELECT * INTO db2inst1.collateral FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.collateral\')
+
+DROP TABLE IF EXISTS db2inst1.collateralrealestate
+
+SELECT * INTO db2inst1.collateralrealestate FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.collateralrealestate\')
+
+DROP TABLE IF EXISTS db2inst1.base_ltrcd
+
+SELECT * INTO db2inst1.base_ltrcd FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.base_ltrcd\')
+
+DROP TABLE IF EXISTS db2inst1.accountindividual
+
+SELECT * INTO db2inst1.accountindividual FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.accountindividual\')
+
+DROP TABLE IF EXISTS db2inst1.individualaddress
+
+SELECT * INTO db2inst1.individualaddress FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.individualaddress\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_ACTIVITYTOTAL
+
+SELECT * INTO db2inst1.AGR_ACTIVITYTOTAL FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_ACTIVITYTOTAL\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_LOANDELQ
+
+SELECT * INTO db2inst1.AGR_LOANDELQ FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_LOANDELQ\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_LOANEXT
+
+SELECT * INTO db2inst1.AGR_LOANEXT FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_LOANEXT\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_MEMBERTOTAL
+
+SELECT * INTO db2inst1.AGR_MEMBERTOTAL FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_MEMBERTOTAL\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_SHARERATE
+
+SELECT * INTO db2inst1.AGR_SHARERATE FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_SHARERATE\')''' Timeout: 30 Result=> QueryResult7
+    @@flowname: '02 Extract VE file'
+DISABLE External.RunFlow FlowId: '852a13e9-f3ff-4e2c-ae77-d8b9b3b2a296' WaitToComplete: True
+    @@flowname: '05 Extract XP2 Express - MONTH END'
+DISABLE External.RunFlow FlowId: '21d411ad-f8c1-ef11-b8e8-7c1e524618dd' WaitToComplete: True
+ELSE IF TextAsNumber3 = 4 THEN
+    @@flowname: '05 Extract XP2 Full Load - MONTH END'
+DISABLE External.RunFlow FlowId: 'bedfb968-dec3-ef11-b8e8-7c1e524618dd' WaitToComplete: True
+ELSE
+    @@flowname: '04 Extract XP2 Full Load - Daily'
+DISABLE External.RunFlow FlowId: '26753e10-cac4-ef11-b8e8-7c1e524618dd' WaitToComplete: True
+END
