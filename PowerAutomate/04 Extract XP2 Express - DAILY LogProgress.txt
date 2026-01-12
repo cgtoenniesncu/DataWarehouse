@@ -1,0 +1,8 @@
+
+FUNCTION LogProgress GLOBAL
+    IF (Folder.IfFolderExists.Exists Path: $'''C:\\PowerAutomate\\Logs''') THEN
+        System.GetEnvironmentVariable.GetEnvironmentVariable Name: $'''COMPUTERNAME''' Value=> ComputerName
+        DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
+        File.WriteText File: $'''C:\\PowerAutomate\\Logs\\%FlowName%_Log.txt''' TextToWrite: $'''%ComputerName% - %CurrentDateTime% - %MessageToLog%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.Unicode
+    END
+END FUNCTION
