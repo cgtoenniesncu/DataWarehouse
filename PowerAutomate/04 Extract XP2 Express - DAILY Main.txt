@@ -1,5 +1,6 @@
 SET FlowName TO $'''04_Extract_XP2_Express_DAILY'''
 SET MessageToLog TO $'''Starting Flow'''
+SET LastErrorMessage TO $'''none'''
 CALL LogProgress
 # OPEN SQL CONNECTION TO NCURPT2
 Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
@@ -117,6 +118,10 @@ End''' Timeout: 900 Result=> QueryResult
     END
     IF loadVar = $'''Failed''' THEN
         Variables.IncreaseVariable Value: FailedCount IncrementValue: 1
+        ERROR => LastError
+        SET LastErrorMessage TO LastError.Message
+        SET MessageToLog TO $'''Error Executing SQL. See log file for details'''
+        CALL LogProgress
     END
     Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GetDate())
 
@@ -142,6 +147,7 @@ Text.ToNumber Text: NewVar2 Number=> TextAsNumber2
 SET MessageToLog TO $'''Loading %TextAsNumber2% express tables without TIMESTAMP into ODS'''
 CALL LogProgress
 # LOAD TABLES WITHOUT TIMESTAMPS INTO ODS USING CURRENT DATE AT THE TIMESTAMP
+SET FailedCount2 TO 0
 LOOP WHILE (TextAsNumber2) > (0)
     Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
     @@copilotGeneratedAction: 'False'
@@ -158,7 +164,6 @@ select TableName, [Schema], rownum FROM (
         SET currentTableName2 TO CurrentItem['TableName']
         SET currentSchemaName2 TO CurrentItem['Schema']
     END
-    SET FailedCount2 TO 0
     SET loadVar2 TO $'''Complete'''
     Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
 
@@ -198,6 +203,10 @@ End''' Timeout: 900 Result=> QueryResult
     END
     IF loadVar2 = $'''Failed''' THEN
         Variables.IncreaseVariable Value: FailedCount2 IncrementValue: 1
+        ERROR => LastError
+        SET LastErrorMessage TO LastError.Message
+        SET MessageToLog TO $'''Error Executing SQL. See log file for details'''
+        CALL LogProgress
     END
     @@copilotGeneratedAction: 'False'
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GetDate())

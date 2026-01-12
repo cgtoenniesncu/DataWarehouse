@@ -3,12 +3,8 @@ FUNCTION LogProgress GLOBAL
     System.GetEnvironmentVariable.GetEnvironmentVariable Name: $'''COMPUTERNAME''' Value=> ComputerName
     DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
     SET LogLevel TO $'''Info'''
-    SET CloseConnection TO $'''False'''
-    IF IsEmpty(SQLConnection) THEN
-        Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=DW1;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
-        SET CloseConnection TO $'''True'''
-    END
-    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE DW1
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=DW1;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnectionLogging
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnectionLogging Statement: $'''USE DW1
 
 INSERT INTO FlowLogs (
     FlowName,
@@ -23,13 +19,18 @@ VALUES (\'%FlowName%\',
     \'%MessageToLog%\',
     \'%LogLevel%\'
 );''' Timeout: 600 Result=> ExpressTables
-    IF CloseConnection = $'''True''' THEN
-        Database.Close Connection: SQLConnection
-    END
+    Database.Close Connection: SQLConnectionLogging
     IF (Folder.IfFolderExists.Exists Path: $'''C:\\PowerAutomate\\Logs''') THEN
         File.WriteText File: $'''C:\\PowerAutomate\\Logs\\%FlowName%_Log.txt''' TextToWrite: $'''%ComputerName% - %CurrentDateTime% - %MessageToLog%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.Unicode
         ON ERROR
 
+        END
+        IF LastErrorMessage <> $'''none''' THEN
+            File.WriteText File: $'''C:\\PowerAutomate\\Logs\\%FlowName%_Log.txt''' TextToWrite: $'''%ComputerName% - %CurrentDateTime% - %LastError%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.Unicode
+            ON ERROR
+
+            END
+            SET LastErrorMessage TO $'''none'''
         END
     END
 END FUNCTION
