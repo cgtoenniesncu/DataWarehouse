@@ -1594,7 +1594,7 @@ DROP TABLE IF EXISTS #viewHistoryPrevMonth
 
 SELECT * INTO #viewHistoryPrevMonth FROM (
 
-SELECT distinct a.* , ROW_NUMBER() OVER (PARTITION BY a.[MEMBER NUMBER], a.SHARE_NBR ORDER BY a.AS_OF_DATE desc) rownum FROM DW1.dbo.view_Deposit_Dashboards a
+SELECT distinct a.* , ROW_NUMBER() OVER (PARTITION BY a.[MEMBER NUMBER], a.SHARE_NBR, a.OPEN_DATE ORDER BY a.AS_OF_DATE desc) rownum FROM DW1.dbo.view_Deposit_Dashboards a
 JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVMONTHEND
 WHERE b.ASOFDATE = @ProcessDate
 )a WHERE rownum = 1
@@ -1603,19 +1603,19 @@ DROP TABLE IF EXISTS #viewHistoryPrevQtr
 
 SELECT * INTO #viewHistoryPrevQtr FROM (
 
-SELECT a.* FROM DW1.dbo.view_Deposit_Dashboards a
+SELECT a.* , ROW_NUMBER() OVER (PARTITION BY a.[MEMBER NUMBER], a.SHARE_NBR, a.OPEN_DATE ORDER BY a.AS_OF_DATE desc) rownum FROM DW1.dbo.view_Deposit_Dashboards a
 JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVQTREND
 WHERE b.ASOFDATE = @ProcessDate
-)a
+)a WHERE a.rownum = 1
 
 DROP TABLE IF EXISTS #viewHistoryPrevYe
 
 SELECT * INTO #viewHistoryPrevYe FROM (
 
-SELECT a.* FROM DW1.dbo.view_Deposit_Dashboards a
+SELECT a.*, ROW_NUMBER() OVER (PARTITION BY a.[MEMBER NUMBER], a.SHARE_NBR, a.OPEN_DATE ORDER BY a.AS_OF_DATE desc) rownum FROM DW1.dbo.view_Deposit_Dashboards a
 JOIN ReferenceTables.dbo.Dim_FileDate b ON a.AS_OF_DATE = b.PREVYEND
 WHERE b.ASOFDATE = @ProcessDate
-)a
+)a WHERE a.rownum = 1
 
 
 DROP TABLE IF EXISTS #closereason
@@ -1774,11 +1774,10 @@ SELECT
   LEFT JOIN #certificate ct ON a.MEMBER_NBR = ct.MEMBER_NBR AND a.SHARE_NBR = ct.SHARE_NBR
   LEFT JOIN #MEMBERINFO MI ON A.MEMBER_NBR = MI.MEMBER_NBR AND a.ASOFDATE = mi.ASOFDATE
   ----LEFT JOIN XP2_Daily_ODS_New.DB2INST1.INDIVIDUAL IND ON mi.INDIVIDUAL_ID = ind.INDIVIDUAL_ID AND CAST(mi.XPTIMESTAMP AS DATE) = CAST(ind.XPTIMESTAMP AS DATE)
-  WHERE a.ASOFDATE = @ProcessDate --AND a.MEMBER_NBR = 1055
+  WHERE a.ASOFDATE = @ProcessDate --AND a.MEMBER_NBR = 27
 
     SET @Maxrownum = @Maxrownum - 1;
 END;
-  
 ''' Timeout: 5000 Result=> QueryResult5
 /# Update view_Loan_Dashboard
 #/
