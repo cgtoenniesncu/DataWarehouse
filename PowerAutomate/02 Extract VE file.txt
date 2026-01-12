@@ -1,0 +1,461 @@
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=Test 2;Data Source=NCURPT2''' Connection=> SQLConnection
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS db2inst1.account
+
+SELECT * INTO DB2INST1.account FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM DB2INST1.ACCOUNT\')
+
+DROP TABLE IF EXISTS db2inst1.Application
+
+SELECT * INTO DB2INST1.Application FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM DB2INST1.APPLICATION\')
+
+DROP TABLE IF EXISTS db2inst1.applicationindividual
+
+SELECT * INTO db2inst1.applicationindividual FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.applicationindividual\')
+
+DROP TABLE IF EXISTS db2inst1.individualcbreport
+
+SELECT * INTO db2inst1.individualcbreport FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.individualcbreport\')
+
+DROP TABLE IF EXISTS db2inst1.applicationcbreport
+
+SELECT * INTO db2inst1.applicationcbreport FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.applicationcbreport\')
+
+DROP TABLE IF EXISTS DB2INST1.CBREPORT
+
+
+SELECT * INTO DB2INST1.CBREPORT FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM DB2INST1.CBREPORT\')
+
+DROP TABLE IF EXISTS db2inst1.cbreportcbsummaryreport
+
+
+SELECT * INTO db2inst1.cbreportcbsummaryreport FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.cbreportcbsummaryreport\')
+
+DROP TABLE IF EXISTS db2inst1.cbscore
+
+
+SELECT * INTO db2inst1.cbscore FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.cbscore\')
+
+DROP TABLE IF EXISTS db2inst1.cbriskmodel
+
+
+SELECT * INTO db2inst1.cbriskmodel FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.cbriskmodel\')
+
+DROP TABLE IF EXISTS db2inst1.loan
+
+SELECT * INTO db2inst1.loan FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.loan\')
+
+DROP TABLE IF EXISTS db2inst1.membership
+
+SELECT * INTO db2inst1.membership FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.membership\')
+
+DROP TABLE IF EXISTS db2inst1.agr_loandelq
+
+SELECT * INTO db2inst1.agr_loandelq FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.agr_loandelq\')
+
+DROP TABLE IF EXISTS db2inst1.individual
+
+SELECT * INTO db2inst1.individual FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.individual\')
+
+DROP TABLE IF EXISTS db2inst1.realestateloan
+
+SELECT * INTO db2inst1.realestateloan FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.realestateloan\')
+
+DROP TABLE IF EXISTS db2inst1.address
+
+SELECT * INTO db2inst1.address FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.address\')
+
+
+DROP TABLE IF EXISTS db2inst1.prebookloan
+
+SELECT * INTO db2inst1.prebookloan FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.prebookloan\')
+
+DROP TABLE IF EXISTS db2inst1.loanproperty
+
+SELECT * INTO db2inst1.loanproperty FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.loanproperty\')
+
+DROP TABLE IF EXISTS db2inst1.individualproperty
+
+SELECT * INTO db2inst1.individualproperty FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.individualproperty\')
+
+DROP TABLE IF EXISTS db2inst1.applicationcollateral
+
+SELECT * INTO db2inst1.applicationcollateral FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.applicationcollateral\')
+
+DROP TABLE IF EXISTS db2inst1.assetvehicle
+
+SELECT * INTO db2inst1.assetvehicle FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.assetvehicle\')
+
+DROP TABLE IF EXISTS db2inst1.assetrealestate
+
+SELECT * INTO db2inst1.assetrealestate FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.assetrealestate\')
+
+DROP TABLE IF EXISTS db2inst1.loancollateral
+
+SELECT * INTO db2inst1.loancollateral FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.loancollateral\')
+
+DROP TABLE IF EXISTS db2inst1.collateral
+
+SELECT * INTO db2inst1.collateral FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.collateral\')
+
+DROP TABLE IF EXISTS db2inst1.collateralrealestate
+
+SELECT * INTO db2inst1.collateralrealestate FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.collateralrealestate\')
+
+DROP TABLE IF EXISTS db2inst1.base_ltrcd
+
+SELECT * INTO db2inst1.base_ltrcd FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.base_ltrcd\')
+
+DROP TABLE IF EXISTS db2inst1.accountindividual
+
+SELECT * INTO db2inst1.accountindividual FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.accountindividual\')
+
+DROP TABLE IF EXISTS db2inst1.individualaddress
+
+SELECT * INTO db2inst1.individualaddress FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.individualaddress\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_ACTIVITYTOTAL
+
+SELECT * INTO db2inst1.AGR_ACTIVITYTOTAL FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_ACTIVITYTOTAL\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_LOANDELQ
+
+SELECT * INTO db2inst1.AGR_LOANDELQ FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_LOANDELQ\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_LOANEXT
+
+SELECT * INTO db2inst1.AGR_LOANEXT FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_LOANEXT\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_MEMBERTOTAL
+
+SELECT * INTO db2inst1.AGR_MEMBERTOTAL FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_MEMBERTOTAL\')
+
+DROP TABLE IF EXISTS db2inst1.AGR_SHARERATE
+
+SELECT * INTO db2inst1.AGR_SHARERATE FROM OPENQUERY (DB2MONTHEND,\'SELECT * FROM db2inst1.AGR_SHARERATE\')''' Timeout: 30 Result=> QueryResult2
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS dbo.query;
+
+WITH
+Last_CB_Score as
+(select distinct apl.aplnum, max(score.cb_score) as cb_score
+   from db2inst1.application apl
+     inner join db2inst1.applicationindividual ai
+       on apl.aplnum = ai.aplnum
+     inner join db2inst1.individualcbreport icb
+       on ai.individual_id = icb.individual_id
+     inner join db2inst1.applicationcbreport acb
+       on apl.aplnum = acb.aplnum
+         and icb.cr_rpt_id = acb.cr_rpt_id
+     inner join DB2INST1.CBREPORT cbr
+       on acb.cr_rpt_id = cbr.cr_rpt_id
+         and cbr.cb_rpt_type = \'M\'
+         and cbr.failed = 0
+     inner join db2inst1.cbreportcbsummaryreport cbr_cbs
+       on cbr.cr_rpt_id = cbr_cbs.cr_rpt_id
+     inner join db2inst1.cbscore score
+       on cbr_cbs.cr_rpt_sum_id = score.cr_rpt_sum_id
+     inner join db2inst1.cbriskmodel rm
+       on score.cb_risk_model_cd = rm.cb_risk_model_cd
+         and score.cb_risk_model_cd <> \'B\'
+  where acb.cr_rpt_id =
+         (
+          select max(acb2.cr_rpt_id)
+            from db2inst1.applicationcbreport acb2
+              inner join db2inst1.applicationindividual ai2
+                on acb2.aplnum = ai2.aplnum
+              inner join db2inst1.individualcbreport icb2
+                on ai2.individual_id = icb2.individual_id
+              inner join db2inst1.cbreportcbsummaryreport cbr_cbs2
+                on acb2.cr_rpt_id = cbr_cbs2.cr_rpt_id
+                  and icb2.cr_rpt_id = cbr_cbs2.cr_rpt_id
+              inner join db2inst1.cbscore score2
+                on cbr_cbs2.cr_rpt_sum_id = score2.cr_rpt_sum_id
+            where acb2.aplnum = apl.aplnum
+              and ai2.individual_id = ai.individual_id
+              and score2.cb_risk_model_cd = score.cb_risk_model_cd
+         )
+  group by apl.aplnum
+    )
+
+
+
+SELECT * INTO dbo.query from (
+
+
+
+select
+ln.member_nbr,
+ln.loan_nbr,
+col.COLLATERAL_ID,
+col.CURRENT_VALUE,
+col.VALUE_VERF_DATE,
+col.value_verified_by,
+ind.tin,
+ln.CLASSIFICATION_CODE as dealer_code,
+mem.branch,
+ln.loan_type,
+lt.ltdescp as type_desc,
+ln.is_written_off,
+ln.closed,
+ln.woff_amount,
+ln.woff_date,
+ln.woff_tot_recov_amt,
+ln.rate,
+ln.limit,
+ap.DBTRatio as NETB,
+ap.DBTRATB4 as GrossB,
+ap.PROJGDBR as GrossA,
+ap.PROJNDBR as NETA,
+dq.daysdel,
+ln.TIMES_DELQ_30_DAYS,
+ln.TIMES_DELQ_60_DAYS,
+ln.TIMES_DELQ_90_DAYS,
+ln.pmt_history,
+coalesce(ln.scheduled_pmt,rel.prin_and_int_amt) as scheduled_pmt,
+ln.freq,
+ln.next_due_date,
+ln.int_accrued,
+ln.int_ltd,
+ln.officer,
+ln.orig_term,
+ln.MONTHLY_TERM,
+ln.final_pmt_date,
+ln.orig_rate,
+ln.orig_amt,
+pbl.bookdate,
+ln.open_date,
+ln.balance,
+mod.loan_property_value as loan_mod,
+remod.loan_property_value as RE_loan_mod,
+pbl.purpcode,
+ln.credit_score as orig_fico,
+lcs.cb_score as application_fico,
+bk.loan_property_value as bk_flag,
+ad.address1,
+ad.address2,
+ad.city,
+ad.county,
+ind.first_name,
+ind.last_name,
+ind.d1name,
+ind.middle_name,
+ad.state,
+ad.zip_str,
+ind.gender,
+ind.birth_date,
+rel.appraised_value as re_appraised_value,
+rel.appraised_date as re_appraised_date,
+rel.orig_appraised_value as re_orig_appraised_value,
+av.make as colmake,
+av.model as colmodel,
+av.year as colyear,
+av.vinstr as colvin,
+ar.address_1 as coladdress1,
+ar.city as colcity,
+ar.stacode as colstate,
+ar.zip as colzip,
+colre.address_1 as coladdress1_3,
+colre.address_2 as coladdress2_3,
+colre.city as colcity_3,
+colre.state_cd as colstate_3,
+colre.zip as colzip_3,
+colre.purchase_price as colpurchaseprice_3,
+colre.residence_type as colresidencetype_3
+
+from
+db2inst1.loan ln
+inner join db2inst1.base_ltrcd lt on
+        ln.loan_type = lt.lttype_
+inner join db2inst1.membership mem on
+        ln.member_nbr = mem.member_nbr and
+        mem.branch <> 63
+inner join db2inst1.agr_loandelq dq on
+        ln.member_nbr = dq.member_nbr and
+        ln.loan_nbr = dq.loan_nbr
+inner join db2inst1.account ac on
+        ln.member_nbr = ac.member_nbr and
+        ln.loan_nbr = ac.account_nbr
+inner join db2inst1.accountindividual ai on
+        ac.member_nbr = ai.member_nbr and
+        ac.account_nbr = ai.account_nbr and
+        ai.participation_type = 6
+inner join db2inst1.individual ind on
+        ai.individual_id = ind.individual_id
+left outer join db2inst1.realestateloan rel on
+        ln.membeR_nbr = rel.membeR_nbr and
+        ln.loan_nbr = rel.loan_nbr
+left outer join db2inst1.individualaddress ia on
+        ind.individual_id = ia.individual_id and
+        ia.is_primary = 1
+left outer join db2inst1.address ad on
+        ia.address_id = ad.address_id
+left outer join db2inst1.application ap on
+        ln.loan_note_nbr = ap.aplnum
+left outer join db2inst1.prebookloan pbl on
+        ap.aplnum = pbl.aplnum
+left outer join db2inst1.loanproperty dealer on
+        ln.membeR_nbr = dealer.member_nbr and
+        ln.loan_nbr = dealer.loan_nbr and
+        dealer.item_name = \'DLDEALER\'
+left outer join db2inst1.loanproperty mod on
+        ln.membeR_nbr = mod.member_nbr and
+        ln.loan_nbr = mod.loan_nbr and
+        mod.item_name = \'OXLoanMod\'
+left outer join db2inst1.loanproperty remod on
+        ln.membeR_nbr = remod.member_nbr and
+        ln.loan_nbr = remod.loan_nbr and
+        remod.item_name = \'OXre_Loan_Mod\'
+left outer join db2inst1.individualproperty fico on
+        ind.individual_id = fico.individual_id and
+        fico.item_name = \'OXCreditScore\'
+left outer join db2inst1.loanproperty year on
+        ln.member_nbr = year.membeR_nbr and
+        ln.loan_nbr = year.loan_nbr and
+        year.item_name = \'DLYEAR\'
+left outer join db2inst1.loanproperty make on
+        ln.member_nbr = make.membeR_nbr and
+        ln.loan_nbr = make.loan_nbr and
+        make.item_name = \'DLMAKE\'
+left outer join db2inst1.loanproperty model on
+        ln.member_nbr = model.membeR_nbr and
+        ln.loan_nbr = model.loan_nbr and
+        model.item_name = \'DLMODEL\'
+left outer join db2inst1.loanproperty vin on
+        ln.member_nbr = vin.membeR_nbr and
+        ln.loan_nbr = vin.loan_nbr and
+        vin.item_name = \'DLVIN\'
+left outer join db2inst1.loanproperty color on
+        ln.member_nbr = color.membeR_nbr and
+        ln.loan_nbr = color.loan_nbr and
+        color.item_name = \'OXVehicleColor\'
+left outer join db2inst1.loanproperty Address1 on
+        ln.member_nbr = address1.membeR_nbr and
+        ln.loan_nbr = address1.loan_nbr and
+        address1.item_name = \'OXCollateralAddress1\'
+left outer join db2inst1.loanproperty Address2 on
+        ln.member_nbr = address2.membeR_nbr and
+        ln.loan_nbr = address2.loan_nbr and
+        address2.item_name = \'OXCollateralAddress2\'
+left outer join db2inst1.loanproperty city on
+        ln.member_nbr = city.membeR_nbr and
+        ln.loan_nbr = city.loan_nbr and
+        city.item_name = \'OXCollateralCity\'
+left outer join db2inst1.loanproperty state on
+        ln.member_nbr = state.membeR_nbr and
+        ln.loan_nbr = state.loan_nbr and
+        state.item_name = \'OXCollateralST\'
+left outer join db2inst1.loanproperty zip on
+        ln.member_nbr = zip.membeR_nbr and
+        ln.loan_nbr = zip.loan_nbr and
+        zip.item_name = \'OXCollateralZIP\'
+left outer join db2inst1.loanproperty bk on
+        ln.member_nbr = bk.member_nbr and
+        ln.loan_nbr = bk.loan_nbr and
+        bk.item_name = \'OXCOLL_BKRFCD\'
+left outer join db2inst1.applicationcollateral az on
+        ap.aplnum = az.aplnum
+left outer join db2inst1.assetvehicle av on
+        az.astnum = av.astnum
+left outer join db2inst1.assetrealestate ar on
+        az.astnum = ar.astnum
+left outer join last_cb_score lcs on
+        ap.aplnum = lcs.aplnum
+left join db2inst1.loancollateral lc
+ on lc.member_nbr = ln.member_nbr
+  and lc.loan_nbr = ln.loan_nbr
+ left join db2inst1.collateral col
+  on col.collateral_id = lc.collateral_id
+ left join db2inst1.collateralrealestate colre
+ on colre.collateral_id = col.collateral_id
+)a''' Timeout: 30 Result=> QueryResult3
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''SELECT [member_nbr]
+      ,[loan_nbr]
+      ,[COLLATERAL_ID]
+      ,[CURRENT_VALUE]
+      ,[VALUE_VERF_DATE]
+      ,[value_verified_by]
+      ,[tin]
+      ,[dealer_code]
+      ,[branch]
+      ,[loan_type]
+      ,[type_desc]
+      ,[is_written_off]
+      ,[closed]
+      ,[woff_amount]
+      ,[woff_date]
+      ,[woff_tot_recov_amt]
+      ,[rate]
+      ,[limit]
+      ,[NETB]
+      ,[GrossB]
+      ,[GrossA]
+      ,[NETA]
+      ,[daysdel]
+      ,[TIMES_DELQ_30_DAYS]
+      ,[TIMES_DELQ_60_DAYS]
+      ,[TIMES_DELQ_90_DAYS]
+      ,[pmt_history]
+      ,[scheduled_pmt]
+      ,[freq]
+      ,[next_due_date]
+      ,[int_accrued]
+      ,[int_ltd]
+      ,[officer]
+      ,[orig_term]
+      ,[MONTHLY_TERM]
+      ,[final_pmt_date]
+      ,[orig_rate]
+      ,[orig_amt]
+      ,[bookdate]
+      ,[open_date]
+      ,[balance]
+      ,[loan_mod]
+      ,[RE_loan_mod]
+      ,[purpcode]
+      ,[orig_fico]
+      ,[application_fico]
+      ,[bk_flag]
+      ,[address1]
+      ,[address2]
+      ,[city]
+      ,[county]
+      ,[first_name]
+      ,[last_name]
+      ,[d1name]
+      ,[middle_name]
+      ,[state]
+      ,[zip_str]
+      ,[gender]
+      ,[birth_date]
+      ,[re_appraised_value]
+      ,[re_appraised_date]
+      ,[re_orig_appraised_value]
+      ,[colmake]
+      ,[colmodel]
+      ,[colyear]
+      ,[colvin]
+      ,[coladdress1]
+      ,[colcity]
+      ,[colstate]
+      ,[colzip]
+      ,[coladdress1_3]
+      ,[coladdress2_3]
+      ,[colcity_3]
+      ,[colstate_3]
+      ,[colzip_3]
+      ,[colpurchaseprice_3]
+      ,[colresidencetype_3]
+  FROM [dbo].[query]''' Timeout: 30 Result=> QueryResult
+Database.Close Connection: SQLConnection
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
+Text.ConvertDateTimeToText.FromCustomDateTime DateTime: CurrentDateTime CustomFormat: $'''dd''' Result=> DayofMonth
+Text.ToNumber Text: DayofMonth Number=> TextAsNumber
+DateTime.Add DateTime: CurrentDateTime TimeToAdd: $'''-%TextAsNumber%''' TimeUnit: DateTime.TimeUnit.Days ResultedDate=> ResultedDate
+Text.ConvertDateTimeToText.FromCustomDateTime DateTime: ResultedDate CustomFormat: $'''yyyyMM''' Result=> FormattedDateTime
+Text.ConvertDateTimeToText.FromCustomDateTime DateTime: ResultedDate CustomFormat: $'''MM_dd_yyyy''' Result=> FormattedDateTime2
+Text.ConvertDateTimeToText.FromCustomDateTime DateTime: ResultedDate CustomFormat: $'''yyyy''' Result=> FormattedDateTime3
+File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: QueryResult CSVFile: $'''C:\\Users\\mcochrum\\Documents\\VE.rpt''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+IF (Folder.IfFolderExists.DoesNotExist Path: $'''W:\\Departments\\VE Documents\\%FormattedDateTime2%\\XP2\\''') THEN
+    Folder.Create FolderPath: $'''W:\\Departments\\VE Documents\\''' FolderName: $'''%FormattedDateTime2%\\XP2\\''' Folder=> NewFolder
+END
+IF (Folder.IfFolderExists.Exists Path: $'''W:\\Departments\\VE Documents\\%FormattedDateTime2%\\XP2\\''') THEN
+    File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: QueryResult CSVFile: $'''W:\\Departments\\VE Documents\\%FormattedDateTime2%\\XP2\\%FormattedDateTime%VE.rpt''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+END

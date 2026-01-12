@@ -1,0 +1,203 @@
+# OPEN SQL CONNECTION TO NCURPT2
+Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+# FIND TABLE EXPRESS TABLES WITH TIMESTAMP
+@@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
+
+Select * FROM XP2_FullLoad_Tables where HasTimestamp = 1 and tablename <> \'AGR_ACTIVITYTOTAL\'''' Timeout: 600 Result=> ExpressTables
+Database.Close Connection: SQLConnection
+# SET VARIABLE EQUAL TO NUMBER OF TABLES W TIMESTAMPS
+SET NewVar TO ExpressTables.RowsCount
+Text.ToNumber Text: NewVar Number=> TextAsNumber
+# LOAD TABLES WITH TIMESTAMP INTO ODS
+LOOP WHILE (TextAsNumber) > (0)
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_New;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_FullLoad_Tables WHERE HasTimeStamp = 1 and tablename <> \'AGR_ACTIVITYTOTAL\'
+	)a WHERE a.rownum = %TextAsNumber%
+
+''' Timeout: 600 Result=> tablename
+    LOOP FOREACH CurrentItem IN tablename
+        SET currentTableName TO CurrentItem['TableName']
+        SET currentSchemaName TO CurrentItem['Schema']
+    END
+    SET loadVar TO $'''Complete'''
+    # DEPRECATED STEP
+    @@copilotGeneratedAction: 'False'
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum into #tables FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_FullLoad_Tables WHERE HasTimeStamp = 1 and tablename <> \'AGR_ACTIVITYTOTAL\'
+	)a WHERE a.rownum = %TextAsNumber%
+
+Declare @myvar int =%TextAsNumber% -- (select Count(TableName) from #tables)
+Declare @TableName varchar(100) 
+DECLARE @SQL Varchar(max)
+DECLARE @SQL2 Varchar(max)
+DECLARE @MaxTSYear VARCHAR(MAX)
+DECLARE @MaxTSMonth VARCHAR(MAX)
+DECLARE @MaxTSDay VARCHAR(MAX)
+
+while @myVar >= %TextAsNumber%
+Begin
+Set @TableName = (select TableName from #tables where rownum = @myVar)
+--Print @tableName
+Set @MaxTSYEar = (SELECT CAST(YEAR(MAX(XPTIMESTAMP)) AS VARCHAR) FROM DB2Inst1.%currentTableName%)
+Set @MaxTSMonth = CAST(FORMAT((SELECT Month(MAX(XPTIMESTAMP))  FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+SET @MaxTSDay = CAST(FORMAT((SELECT Day(MAX(XPTIMESTAMP)) FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+--PRINT @MaxTSYear
+--PRINT @MaxTSMonth
+--PRINT @MaxTSDay
+
+SET @SQL = \'
+DROP TABLE IF EXISTS #temp1
+DELETE FROM DB2Inst1.\' + @TableName + \' WHERE Cast(DateAdd(hh,-6,Cast(XPTIMESTAMP as datetime)) as date) > \'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'
+SELECT * INTO #temp1 FROM OPENQUERY (DB2DAILY,\'\'SELECT * FROM DB2INST1.\' + @TableName + \' WHERE ADD_HOURS(XPTIMESTAMP,-6) > \'\'\'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'\'\' \'\' )
+Insert into db2inst1.\' + @TableName + \' 
+SELECT * FROM #temp1
+\'
+EXEC(@SQL)
+Set @myVar = @myVar - 1
+End''' Timeout: 900 Result=> QueryResult
+ON ERROR SqlStatementError
+    SET loadVar TO $'''Failed'''
+END
+    Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_Daily_ODS_New
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum into #tables FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_FullLoad_Tables WHERE HasTimeStamp = 1 and tablename <> \'AGR_ACTIVITYTOTAL\'
+	)a WHERE a.rownum = %TextAsNumber%
+
+Declare @myvar int =%TextAsNumber% -- (select Count(TableName) from #tables)
+Declare @TableName varchar(100) 
+DECLARE @SQL Varchar(max)
+DECLARE @SQL2 Varchar(max)
+DECLARE @MaxTSYear VARCHAR(MAX)
+DECLARE @MaxTSMonth VARCHAR(MAX)
+DECLARE @MaxTSDay VARCHAR(MAX)
+
+while @myVar >= %TextAsNumber%
+Begin
+Set @TableName = (select TableName from #tables where rownum = @myVar)
+--Print @tableName
+Set @MaxTSYEar = (SELECT CAST(YEAR(MAX(XPTIMESTAMP)) AS VARCHAR) FROM DB2Inst1.%currentTableName%)
+Set @MaxTSMonth = CAST(FORMAT((SELECT Month(MAX(XPTIMESTAMP))  FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+SET @MaxTSDay = CAST(FORMAT((SELECT Day(MAX(XPTIMESTAMP)) FROM DB2Inst1.%currentTableName%),\'00\') AS VARCHAR)
+--PRINT @MaxTSYear
+--PRINT @MaxTSMonth
+--PRINT @MaxTSDay
+
+SET @SQL = \'
+DROP TABLE IF EXISTS #temp1
+DELETE FROM DB2Inst1.\' + @TableName + \' WHERE Cast(XPTIMESTAMP as date) > \'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'
+SELECT * INTO #temp1 FROM OPENQUERY (DB2DAILY,\'\'SELECT * FROM DB2INST1.\' + @TableName + \' WHERE XPTIMESTAMP > \'\'\'\'\' + @MaxTSYear + \'-\' + @MaxTSMonth + \'-\' + @MaxTSDay + \'\'\'\'\' \'\' )
+Insert into db2inst1.\' + @TableName + \' 
+SELECT * FROM #temp1
+\'
+EXEC(@SQL)
+Set @myVar = @myVar - 1
+End''' Timeout: 900 Result=> QueryResult
+    ON ERROR SqlStatementError
+        SET loadVar TO $'''Failed'''
+    END
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GETDATE())
+
+
+DELETE FROM XP2_Daily_ODS_New.dbo.LoadStatus where TableName = \'%currentTableName%\' AND LoadDate = @ProcessDate
+INSERT INTO XP2_Daily_ODS_New.dbo.LoadStatus (TableName, LoadDate, Status)
+VALUES (\'%currentTableName%\', @ProcessDate, \'%loadVar%\')''' Timeout: 30 Result=> QueryResult3
+    Database.Close Connection: SQLConnection
+    Variables.DecreaseVariable Value: TextAsNumber DecrementValue: 1
+END
+# OPEN DATABASE CONNECTION
+Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+# FIND EXPRESS TABLES WITHOUT TIMESTAMP
+@@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
+
+Select * FROM XP2_FullLoad_Tables where HasTimestamp = 0 and tablename <> \'AGR_ACTIVITYTOTAL\'''' Timeout: 600 Result=> ExpressTables2
+@@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GETDATE())
+
+DELETE FROM XP2_Daily_ODS_New.dbo.LoadStatus where TableName = \'%currentTableName2%\' AND LoadDate = @ProcessDate
+INSERT INTO XP2_Daily_ODS_New.dbo.LoadStatus (TableName, LoadDate, Status)
+VALUES (\'%currentTableName2%\', @ProcessDate, \'%loadVar2%\')''' Timeout: 30 Result=> QueryResult3
+Database.Close Connection: SQLConnection
+SET NewVar2 TO ExpressTables2.RowsCount
+Text.ToNumber Text: NewVar2 Number=> TextAsNumber2
+# LOAD TABLES WITHOUT TIMESTAMPS INTO ODS USING CURRENT DATE AT THE TIMESTAMP
+LOOP WHILE (TextAsNumber2) > (0)
+    WAIT 5
+    Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_New;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_MonthEnd_ODS
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_FullLoad_Tables WHERE HasTimeStamp = 0 and tablename <> \'AGR_ACTIVITYTOTAL\'
+	)a WHERE a.rownum = %TextAsNumber2%
+
+''' Timeout: 600 Result=> tablename2
+    LOOP FOREACH CurrentItem IN tablename2
+        SET currentTableName2 TO CurrentItem['TableName']
+        SET currentSchemaName2 TO CurrentItem['Schema']
+    END
+    SET loadVar2 TO $'''Complete'''
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE XP2_DAILY_ODS_New
+
+Drop Table if Exists #tables
+
+select TableName, [Schema], rownum into #tables FROM (
+	select *, ROW_NUMBER() OVER (Partition by [schema] order by tablename desc) rownum from ReferenceTables.dbo.XP2_FullLoad_Tables WHERE HasTimeStamp = 0 and tablename <> \'AGR_ACTIVITYTOTAL\'
+	)a WHERE a.rownum = %TextAsNumber2%
+
+Declare @myvar int =%TextAsNumber2% -- (select Count(TableName) from #tables)
+Declare @TableName varchar(100) 
+DECLARE @SQL Varchar(max)
+DECLARE @SQL2 Varchar(max)
+DECLARE @ProcessDate Varchar(max)
+
+
+while @myVar >= %TextAsNumber2%
+Begin
+Set @TableName = (select TableName from #tables where rownum = @myVar)
+--Print @tableName
+Set @ProcessDate = Cast(DateAdd(dd,-1,GetDate()) as varchar)
+
+
+
+SET @SQL = \'
+DROP TABLE IF EXISTS #temp1
+DROP TABLE IF EXISTS DB2Inst1.\' + @TableName + \'
+ SELECT * INTO #temp1 FROM OPENQUERY (DB2DAILY,\'\'SELECT * FROM DB2INST1.\' + @TableName + \' \'\' )
+SELECT * INTO db2inst1.\' + @TableName + \' FROM (
+SELECT * FROM #temp1)a
+\'
+EXEC(@SQL)
+Set @myVar = @myVar - 1
+End
+''' Timeout: 900 Result=> QueryResult
+    ON ERROR SqlStatementError
+        SET loadVar2 TO $'''Failed'''
+    END
+    @@copilotGeneratedAction: 'False'
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''Declare @ProcessDate date = DateAdd(dd,-1,GETDATE())
+
+DELETE FROM XP2_Daily_ODS_New.dbo.LoadStatus where TableName = \'%currentTableName2%\' AND LoadDate = @ProcessDate
+INSERT INTO XP2_Daily_ODS_New.dbo.LoadStatus (TableName, LoadDate, Status)
+VALUES (\'%currentTableName2%\', @ProcessDate, \'%loadVar2%\')''' Timeout: 30 Result=> QueryResult2
+    Database.Close Connection: SQLConnection
+    Variables.DecreaseVariable Value: TextAsNumber2 DecrementValue: 1
+END
