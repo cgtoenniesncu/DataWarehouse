@@ -1,4 +1,5 @@
 # OPEN SQL CONNECTION TO NCURPT2
+# 20250825
 Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
 # FIND TABLE EXPRESS TABLES WITH TIMESTAMP
 @@copilotGeneratedAction: 'False'
