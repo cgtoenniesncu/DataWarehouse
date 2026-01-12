@@ -1,6 +1,4 @@
 # OPEN SQL CONNECTION TO NCURPT2
-# 20250828
-# 20250828
 Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=ReferenceTables;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
 # FIND TABLE EXPRESS TABLES WITH TIMESTAMP
 @@copilotGeneratedAction: 'False'
@@ -2222,5 +2220,5 @@ ELSE IF TextAsNumber3 = 4 THEN
 DISABLE External.RunFlow FlowId: 'bedfb968-dec3-ef11-b8e8-7c1e524618dd' WaitToComplete: True
 ELSE
     @@flowname: '04 Extract XP2 Full Load - Daily'
-DISABLE External.RunFlow FlowId: '26753e10-cac4-ef11-b8e8-7c1e524618dd' WaitToComplete: True
+External.RunFlow FlowId: '26753e10-cac4-ef11-b8e8-7c1e524618dd' WaitToComplete: True
 END
