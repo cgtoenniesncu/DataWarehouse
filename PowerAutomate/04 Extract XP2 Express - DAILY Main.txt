@@ -2126,6 +2126,19 @@ SELECT * FROM ReferenceTables.dbo.Dim_FileDate WHERE ASOFDATE = @PROCESSDATE
 
 )a
 
+DROP TABLE IF EXISTS #membershipclosereason
+
+SELECT * INTO #membershipclosereason FROM (
+SELECT 
+      [MEMBER_NBR]
+   
+      ,MEMBERSHIP_ITEM_VALUE + \' - \' +[VALUELIST_ITEM_DESCRIPTION] CLOSEREASON
+
+	  , ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR ORDER BY XPTIMESTAMP DESC) rownum
+      
+  FROM [XP2_Daily_ODS_New].[DB2INST1].[MEMBERSHIPPROPERTY] WHERE ITEM_NAME = \'OXCLOSECODE\' AND CAST(DATEADD(HOUR,-6,XPTIMESTAMP) AS DATE) <= @ProcessDate
+  )mcr WHERE mcr.rownum = 1
+  
 DELETE FROM dw1.dbo.View_MemberDashboard WHERE AS_OF_DATE = @PROCESSDATE
 
 INSERT INTO dw1.dbo.View_MemberDashboard
@@ -2165,7 +2178,11 @@ SELECT DISTINCT
 	 ,a.BIRTH_DATE
 	  ,a.TIN
 	 ,\'XP2\'
-	 ,\'\'
+	 ,CASE
+		WHEN a.status = \'CLOSED\' THEN mcr.CLOSEREASON 
+		ELSE 
+		NULL
+		END [CLOSE REASON]
 	 ,\'\'
 	 ,\'\'
 	 ,null [Close Date]
@@ -2190,6 +2207,7 @@ SELECT DISTINCT
 	
     
   FROM #MEMBERINFO_Member a
+  LEFT JOIN #membershipclosereason mcr ON a.MEMBER_NBR = mcr.MEMBER_NBR
   LEFT JOIN #MEMBERS b ON a.MEMBER_NBR = b.MEMBER_NBR
   LEFT JOIN XP2_Daily_ODS_New.DB2INST1.AGR_MEMBERTOTAL c ON b.MEMBER_NBR = c.MEMBER_NBR AND a.ASOFDATE = c.ProcessDate
   LEFT JOIN #filedate_Member d ON a.ASOFDATE = d.ASOFDATE
