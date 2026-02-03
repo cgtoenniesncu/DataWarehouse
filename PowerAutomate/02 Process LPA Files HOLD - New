@@ -1,0 +1,4331 @@
+File.Delete Files: $'''\\\\picard\\User\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\*'''
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateOnly CurrentDateTime=> CurrentDateTime
+Text.ConvertDateTimeToText.FromCustomDateTime DateTime: CurrentDateTime CustomFormat: $'''dd''' Result=> CurrentDay
+Text.ToNumber Text: CurrentDay Number=> TextAsNumber
+DateTime.Add DateTime: CurrentDateTime TimeToAdd: $'''-%TextAsNumber%''' TimeUnit: DateTime.TimeUnit.Days ResultedDate=> EndofMonth
+DISABLE Display.InputDialog Title: $'''End of Month Date''' Message: $'''Enter End of Month Date as MM/DD/YYYY''' InputType: Display.InputType.SingleLine IsTopMost: True UserInput=> UserInput ButtonPressed=> ButtonPressed
+Text.ConvertDateTimeToText.FromCustomDateTime DateTime: EndofMonth CustomFormat: $'''yyyy''' Result=> Year
+Text.ConvertDateTimeToText.FromCustomDateTime DateTime: EndofMonth CustomFormat: $'''MM''' Result=> Month
+Text.ConvertDateTimeToText.FromCustomDateTime DateTime: EndofMonth CustomFormat: $'''dd''' Result=> Day
+@@flowname: 'Process Loan Street File'
+DISABLE External.RunFlow FlowId: '2e057d10-9248-42b2-b8e6-422cd4b8ff56'
+IF (Folder.IfFolderExists.Exists Path: $'''\\\\picard\\User\\Departments\\VE Documents\\%Year%\\%Month%_%Day%_%Year%''') THEN
+    Folder.GetFiles Folder: $'''\\\\picard\\User\\Departments\\VE Documents\\%Year%\\%Month%_%Day%_%Year%\\Files Submitted with Naming Convention''' FileFilter: $'''*''' IncludeSubfolders: False FailOnAccessDenied: True SortBy1: Folder.SortBy.NoSort SortDescending1: False SortBy2: Folder.SortBy.NoSort SortDescending2: False SortBy3: Folder.SortBy.NoSort SortDescending3: False Files=> Files
+    File.Copy Files: Files Destination: $'''\\\\picard\\User\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER''' IfFileExists: File.IfExists.Overwrite CopiedFiles=> CopiedFiles
+    CALL 'Process Commercial File'
+    CALL 'Process PSCU File'
+    CALL 'Process DMI FIle'
+    CALL 'Process LoanSource File'
+    CALL 'Process PSL File'
+    @@flowname: 'Process PSL File 2'
+DISABLE External.RunFlow FlowId: '20f48a87-e0cf-4bab-9af6-23b8c29263fd'
+    CALL 'Process CSL Subflow'
+    @@flowname: 'Process CSL File'
+DISABLE External.RunFlow FlowId: '3c738f81-290b-44a4-a033-8d0c38d90c2d'
+    CALL 'Process RaymondJames File Subflow'
+    CALL 'Process LoanStreet File'
+    @@flowname: 'Process RymondJames File'
+DISABLE External.RunFlow FlowId: '7b55abc3-c2ba-4140-989a-4b2bbb07c0be'
+END
+DISABLE IF (File.IfFile.Exists File: $'''\\\\picard\\User\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_PSCU.txt''') THEN
+    DISABLE File.ReadFromCSVFile.ReadCSV CSVFile: $'''\\\\picard\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_PSCU.txt''' Encoding: File.CSVEncoding.UTF8 TrimFields: True FirstLineContainsColumnNames: True ColumnsSeparator: File.CSVColumnsSeparator.Comma CSVTable=> CSVTable
+    DISABLE File.WriteToCSVFile.WriteCSV VariableToWrite: CSVTable CSVFile: $'''\\\\picard\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_PSCU.csv''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite ColumnsSeparator: File.CSVColumnsSeparator.Comma
+DISABLE END
+IF (File.IfFile.Exists File: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_Loans.csv''') THEN
+    Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_Loans.csv''' Visible: True ReadOnly: False UseMachineLocale: False Instance=> ExcelInstance
+    Excel.ReadFromExcel.ReadAllCells Instance: ExcelInstance GetCellContentsMode: Excel.GetCellContentsMode.TypedValues FirstLineIsHeader: True RangeValue=> ExcelData
+    File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: ExcelData CSVFile: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_Loans_pipe.csv''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+    Excel.CloseExcel.Close Instance: ExcelInstance
+END
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+/# LOAD CSL DATA
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @date date = \'%Year%-%Month%-%Day%\'
+DECLARE @YEAR int = CAST(DATEPART(yyyy,@Date) AS VARCHAR)
+DECLARE @MONTH INT = CAST(DATEPART(mm,@Date) AS VARCHAR)
+DECLARE @DAY INT = CAST(DATEPART(dd,@Date) AS VARCHAR)
+
+DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_CSL.txt\'
+
+DROP TABLE IF EXISTS #temptable
+
+CREATE TABLE #temptable(
+	[Asofdate] [varchar](50) NULL,
+	[Lender_ID] [varchar](50) NULL,
+	[Lender_Name] [varchar](50) NULL,
+	[Orig_Lender_ID] [varchar](50) NULL,
+	[Orig_Lender_Name] [varchar](5000) NULL,
+	[Lender_Role] [varchar](50) NULL,
+	[Loan_Participation] [varchar](50) NULL,
+	[Loan_ID] [varchar](50) NULL,
+	[Risk_Score] [varchar](50) NULL,
+	[Rate_Grade] [varchar](50) NULL,
+	[Cosigned] [varchar](50) NULL,
+	[Base_Rate_Type] [varchar](50) NULL,
+	[Curr_Base_Rate_Pct] [varchar](50) NULL,
+	[Margin_Pct] [varchar](50) NULL,
+	[Current_Rate_Pct] [varchar](50) NULL,
+	[Average_Weighted_Int_Rate] [varchar](50) NULL,
+	[Insured] [varchar](50) NULL,
+	[Loan_Status] [varchar](50) NULL,
+	[1st_Repay_Date] [varchar](50) NULL,
+	[Final_Mat_Date] [varchar](50) NULL,
+	[Application_Date] [varchar](50) NULL,
+	[First_Disbursement_Date] [varchar](50) NULL,
+	[Program_Name] [varchar](50) NULL,
+	[Program_Type] [varchar](50) NULL,
+	[Program_Year] [varchar](50) NULL,
+	[Origination_Fee_Pct] [varchar](50) NULL,
+	[Servicing_Fee_Pct] [varchar](50) NULL,
+	[Existing_Borrower] [varchar](50) NULL,
+	[Borr_ID] [varchar](50) NULL,
+	[Borr_FName] [varchar](50) NULL,
+	[Borr_LName] [varchar](50) NULL,
+	[Borr_State] [varchar](50) NULL,
+	[Borr_FICO] [varchar](50) NULL,
+	[CoSigner_FName] [varchar](50) NULL,
+	[CoSigner_LName] [varchar](50) NULL,
+	[CoSigner_FICO] [varchar](50) NULL,
+	[School_Code] [varchar](50) NULL,
+	[School_Name] [varchar](5000) NULL,
+	[CDR_Pct] [varchar](max) NULL,
+	[Insurance_Program_Year] [varchar](50) NULL,
+	[Insurance_Tier] [varchar](50) NULL,
+	[All_Disbursements_Bal_-_Original_Loan] [varchar](50) NULL,
+	[All_Disbursements_Bal_-_Original_Lender] [varchar](50) NULL,
+	[Orig_Fee_-_Borr_Loan] [varchar](50) NULL,
+	[Orig_Fee_-_Borr_Lender] [varchar](50) NULL,
+	[Loan_Cancellation_Loan_Level] [varchar](50) NULL,
+	[Loan_Cancellation_Lender] [varchar](50) NULL,
+	[Loan_Bal_-_Original_Loan] [varchar](50) NULL,
+	[Loan_Bal_-_Original_Lender] [varchar](50) NULL,
+	[Loan_Bal_-_Beg_Month_Loan] [varchar](50) NULL,
+	[Loan_Bal_-_Beg_Month_Lender] [varchar](50) NULL,
+	[Loan_Bal_-_Month_End_Loan] [varchar](50) NULL,
+	[Loan_Bal_-_Month_End_Lender] [varchar](50) NULL,
+	[Accrued_Int_-_Month_End_Loan] [varchar](50) NULL,
+	[Accrued_Int_-_Month_End_Lender] [varchar](50) NULL,
+	[Num_of_Disbursements] [varchar](50) NULL,
+	[Curr_Month_Disb_Number] [varchar](50) NULL,
+	[Curr_Month_Disb_Date] [varchar](50) NULL,
+	[Curr_Month_Disb_Amt_Loan] [varchar](50) NULL,
+	[Curr_Month_Disb_Amt_Lender] [varchar](50) NULL,
+	[Num_Disbursements_Made] [varchar](50) NULL,
+	[Amount_Disbursed_Loan] [varchar](50) NULL,
+	[Amount_Disbursed_Lender] [varchar](50) NULL,
+	[Num_Disbursements_Remaining] [varchar](50) NULL,
+	[Amount_Remaining_Loan] [varchar](50) NULL,
+	[Amount_Remaining_Lender] [varchar](50) NULL,
+	[Borr_Pmt_-_Monthly_Loan] [varchar](50) NULL,
+	[Borr_Pmt_-_Monthly_Lender] [varchar](50) NULL,
+	[Int_Pmt_-_Monthly_Loan] [varchar](50) NULL,
+	[Int_Pmt_-_Monthly_Lender] [varchar](50) NULL,
+	[Prin_Pmt_-_Monthly_Loan] [varchar](50) NULL,
+	[Prin_Pmt_-_Monthly_Lender] [varchar](50) NULL,
+	[Late_Pmt_Fees_-_Monthly_Loan] [varchar](50) NULL,
+	[Late_Pmt_Fees_-_Monthly_Lender] [varchar](50) NULL,
+	[NSF_Fees_-_Monthly_Loan] [varchar](50) NULL,
+	[NSF_Fees_-_Monthly_Lender] [varchar](50) NULL,
+	[Other_Fees_-_Monthly_Loan] [varchar](50) NULL,
+	[Other_Fees_-_Monthly_Lender] [varchar](50) NULL,
+	[Accrued_Int_-_Monthly_Loan] [varchar](50) NULL,
+	[Accrued_Int_-_Monthly_Lender] [varchar](50) NULL,
+	[Cap_Int_-_Monthly_Loan] [varchar](50) NULL,
+	[Cap_Int_-_Monthly_Lender] [varchar](50) NULL,
+	[Borr_Pmt_-_Lifetime_Loan] [varchar](50) NULL,
+	[Borr_Pmt_-_Lifetime_Lender] [varchar](50) NULL,
+	[Int_Pmt_-_Lifetime_Loan] [varchar](50) NULL,
+	[Int_Pmt_-_Lifetime_Lender] [varchar](50) NULL,
+	[Prin_Pmt_-_Lifetime_Loan] [varchar](50) NULL,
+	[Prin_Pmt_-_Lifetime_Lender] [varchar](50) NULL,
+	[Late_Pmt_Fees_-_Lifetime_Loan] [varchar](50) NULL,
+	[Late_Pmt_Fees_-_Lifetime_Lender] [varchar](50) NULL,
+	[NSF_Fees_-_Lifetime_Loan] [varchar](50) NULL,
+	[NSF_Fees_-_Lifetime_Lender] [varchar](50) NULL,
+	[Other_Fees_-_Lifetime_Loan] [varchar](50) NULL,
+	[Other_Fees_-_Lifetime_Lender] [varchar](50) NULL,
+	[Accrued_Int_-_Lifetime_Loan] [varchar](50) NULL,
+	[Accrued_Int_-_Lifetime_Lender] [varchar](50) NULL,
+	[Cap_Int_-_Lifetime_Loan] [varchar](50) NULL,
+	[Cap_Int_-_Lifetime_Lender] [varchar](50) NULL,
+	[Orig_Expense_-_Monthly_Loan] [varchar](50) NULL,
+	[Orig_Expense_-_Monthly_Lender] [varchar](50) NULL,
+	[Serv_Expense_-_Monthly_Loan] [varchar](50) NULL,
+	[Serv_Expense_-_Monthly_Lender] [varchar](50) NULL,
+	[Serv_Expense_-_Lifetime_Loan] [varchar](50) NULL,
+	[Serv_Expense_-_Lifetime_Lender] [varchar](50) NULL,
+	[Payment_Type] [varchar](50) NULL,
+	[Loan_Condition] [varchar](50) NULL,
+	[Days_Delinquent] [varchar](50) NULL,
+	[Next_Due_Date] [varchar](50) NULL,
+	[(Total_Loan)_Past_Due] [varchar](50) NULL,
+	[(Total_Loan)_Current_Due_Amount] [varchar](50) NULL,
+	[(Total_Loan)_Total_Due] [varchar](50) NULL,
+	[Total_Charge_Off_Lifetime_Loan] [varchar](50) NULL,
+	[Total_Charge_Off_Lifetime_Lender] [varchar](50) NULL,
+	[Net_Defaults_Loan] [varchar](50) NULL,
+	[Net_Defaults_Lender] [varchar](50) NULL,
+	[Default_Recoveries_Loan] [varchar](50) NULL,
+	[Default_Recoveries_Lender] [varchar](50) NULL,
+	[Total_Forbearance_Months] [varchar](50) NULL,
+	[Current_Forbearance_Start] [varchar](50) NULL,
+	[Current_Forbearance_End] [varchar](50) NULL,
+	[Waived_Late_Fees_Lifetime_Loan] [varchar](50) NULL,
+	[Waived_Late_Fees_Lifetime_Lender] [varchar](50) NULL,
+	[Waived_NSF_Fees_Loan] [varchar](50) NULL,
+	[Waived_NSF_Fees_Lender] [varchar](50) NULL,
+	[Borrower_Account_Number] [varchar](50) NULL,
+	[Orig_Expense_-_Lifetime_Loan] [varchar](50) NULL,
+	[Orig_Expense_-_Lifetime_Lender] [varchar](50) NULL,
+	[School_Cert_Expense_-_Monthly_Loan] [varchar](50) NULL,
+	[School_Cert_Expense_-_Monthly_Lender] [varchar](50) NULL,
+	[School_Cert_Expense_-_Lifetime_Loan] [varchar](50) NULL,
+	[School_Cert_Expense_-_Lifetime_Lender] [varchar](50) NULL,
+	[Disb_Cost_-_Monthly_Loan] [varchar](50) NULL,
+	[Disb_Cost_-_Monthly_Lender] [varchar](50) NULL,
+	[Disb_Cost_-_Lifetime_Loan] [varchar](50) NULL,
+	[Disb_Cost_-_Lifetime_Lender] [varchar](50) NULL,
+	[Pre_Disb_Cancellation_Loan] [varchar](50) NULL,
+	[Pre_Disb_Cancellation_Lender] [varchar](50) NULL,
+	[Late_Fees_Due_-_Month_End_Loan] [varchar](50) NULL,
+	[Late_Fees_Due_-_Month_End_Lender] [varchar](50) NULL,
+	[Assessed_Late_Fees_-_Monthly_Loan] [varchar](50) NULL,
+	[Assessed_Late_Fees_-_Monthly_Lender] [varchar](50) NULL,
+	[Assessed_Late_Fees_-_Lifetime_Loan] [varchar](50) NULL,
+	[Assessed_Late_Fees_-_Lifetime_Lender] [varchar](50) NULL,
+	[Charge_Off_Prin_Lifetime_Loan] [varchar](50) NULL,
+	[Charge_Off_Prin_Lifetime_Lender] [varchar](50) NULL,
+	[Charge_Off_Interest_Lifetime_Loan] [varchar](50) NULL,
+	[Charge_Off_Interest_Lifetime_Lender] [varchar](50) NULL,
+	[Charge_Off_Late_Fees_Lifetime_Loan] [varchar](50) NULL,
+	[Charge_Off_Late_Fees_Lifetime_Lender] [varchar](50) NULL,
+	[Charge_Off_Prin_Monthly_Loan] [varchar](50) NULL,
+	[Charge_Off_Prin_Monthly_Lender] [varchar](50) NULL,
+	[Charge_Off_Interest_Monthly_Loan] [varchar](50) NULL,
+	[Charge_Off_Interest_Monthly_Lender] [varchar](50) NULL,
+	[Charge_Off_Late_Fees_Monthly_Loan] [varchar](50) NULL,
+	[Charge_Off_Late_Fees_Monthly_Lender] [varchar](50) NULL,
+	[Total_Charge_Off_Monthly_Loan] [varchar](50) NULL,
+	[Total_Charge_Off_Monthly_Lender] [varchar](50) NULL,
+	[Waived_Late_Fees_Monthly_Loan] [varchar](50) NULL,
+	[Waived_Late_Fees_Monthly_Lender] [varchar](50) NULL,
+	[Term_To_Maturity_Months] [varchar](50) NULL,
+	[Last_Payment_Date] [varchar](50) NULL,
+	[Loan_Insured_By] [varchar](50) NULL,
+	[Loan_Status_Last_Updated] [varchar](50) NULL,
+	[Original_Base_Rate] [varchar](50) NULL,
+	[Borrower_Bankruptcy_Chapter] [varchar](50) NULL,
+	[Cosigner_Bankruptcy_Chapter] [varchar](50) NULL,
+	[Billing_Cycle] [varchar](50) NULL,
+	[Degree_Type] [varchar](50) NULL,
+	[Payment_Method] [varchar](50) NULL,
+	[Cosigner_Release_Date] [varchar](max) NULL,
+	[Platform_Key] [varchar](50) NULL,
+	[Previously_Insured] [varchar](50) NULL,
+	[Insured_End_Date] [varchar](50) NULL,
+	[Reinstate_Prin_Monthly_Loan] [varchar](50) NULL,
+	[Reinstate_Prin_Monthly_Lender] [varchar](50) NULL,
+	[Reinstate_Prin_Lifetime_Loan] [varchar](50) NULL,
+	[Reinstate_Prin_Lifetime_Lender] [varchar](50) NULL,
+	[Reinstate_Interest_Monthly_Loan] [varchar](50) NULL,
+	[Reinstate_Interest_Monthly_Lender] [varchar](50) NULL,
+	[Reinstate_Interest_Lifetime_Loan] [varchar](50) NULL,
+	[Reinstate_Interest_Lifetime_Lender] [varchar](50) NULL,
+	[Reinstate_Late_Fees_Monthly_Loan] [varchar](50) NULL,
+	[Reinstate_Late_Fees_Monthly_Lender] [varchar](50) NULL,
+	[Reinstate_Late_Fees_Lifetime_Loan] [varchar](50) NULL,
+	[Reinstate_Late_Fees_Lifetime_Lender] [varchar](50) NULL,
+	[Reinstate_NSF_Fees_Monthly_Loan] [varchar](50) NULL,
+	[Reinstate_NSF_Fees_Monthly_Lender] [varchar](50) NULL,
+	[Reinstate_NSF_Fees_Lifetime_Loan] [varchar](50) NULL,
+	[Reinstate_NSF_Fees_Lifetime_Lender] [varchar](50) NULL,
+	[Reinstate_Other_Fees_Monthly_Loan] [varchar](50) NULL,
+	[Reinstate_Other_Fees_Monthly_Lender] [varchar](50) NULL,
+	[Reinstate_Other_Fees_Lifetime_Loan] [varchar](50) NULL,
+	[Reinstate_Other_Fees_Lifetime_Lender] [varchar](50) NULL,
+	[Beginning_Interest_Balance_Calendar_Month_Loan] [varchar](50) NULL,
+	[Beginning_Interest_Balance_Calendar_Month_Lender] [varchar](50) NULL,
+	[Prior_Period_Adjustments_Calendar_Month_Loan] [varchar](50) NULL,
+	[Prior_Period_Adjustments_Calendar_Month_Lender] [varchar](50) NULL,
+	[Interest_Accrued_Calendar_Month_Loan] [varchar](50) NULL,
+	[Interest_Accrued_Calendar_Month_Lender] [varchar](50) NULL,
+	[Ending_Interest_Balance_Calendar_Month_Loan] [varchar](50) NULL,
+	[Ending_Interest_Balance_Calendar_Month_Lender] [varchar](50) NULL,
+	[Loan_Condition_Payment] [varchar](50) NULL,
+	[Loan_Condition_Category] [varchar](50) NULL,
+	[Loan_Condition_Type] [varchar](50) NULL,
+	[Collection_Status] [varchar](50) NULL)
+
+
+
+DECLARE @SQL VARCHAR(MAX)
+SET @SQL = \'
+
+BULK INSERT #temptable 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		
+		FIRSTROW = 2,
+		
+		FIELDTERMINATOR = \'\'|\'\',
+		ROWTERMINATOR = \'\'0x0a\'\' 
+		
+		
+		);\'
+
+
+EXEC(@SQL)
+
+--SELECT * FROM #temptable
+
+--DECLARE @lastdate DATE = (SELECT CAST(CONVERT(VARCHAR,MAX(ASOFDATE),101) AS DATE) ASOFDATE FROM #temptable)
+
+DELETE FROM [NCino Data Files].dbo.STAGING_CONSOLIDATED_STUDENT WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
+INSERT INTO [NCino Data Files].dbo.STAGING_CONSOLIDATED_STUDENT
+SELECT * FROM #temptable
+
+DROP TABLE IF EXISTS #temptable
+''' Timeout: 30 Result=> QueryResult
+/# LOAD COMMERCIAL DATA
+
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @date date = \'%Year%-%Month%-%Day%\'
+DECLARE @YEAR int = CAST(DATEPART(yyyy,@Date) AS VARCHAR)
+DECLARE @MONTH INT = CAST(DATEPART(mm,@Date) AS VARCHAR)
+DECLARE @DAY INT = CAST(DATEPART(dd,@Date) AS VARCHAR)
+
+DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_Commercial_pipe.csv\'
+
+DROP TABLE IF EXISTS #temptable
+
+CREATE TABLE #temptable(
+	[Loan Number] [VARCHAR](50) NULL,
+	[Member Number] [VARCHAR](50) NULL,
+	[CECL Status - (Active, Closed)] [VARCHAR](50) NULL,
+	[Paid Off Date] [VARCHAR](50) NULL,
+	[Borr Name] [VARCHAR](50) NULL,
+	[Borr Addr 1] [VARCHAR](50) NULL,
+	[Borr Addr 2] [VARCHAR](50) NULL,
+	[Borr City] [VARCHAR](50) NULL,
+	[Borr St] [VARCHAR](50) NULL,
+	[Borr Zip] [VARCHAR](50) NULL,
+	[Borr Phone] [VARCHAR](50) NULL,
+	[Borr SSN TIN] [VARCHAR](50) NULL,
+	[Principal] [VARCHAR](50) NULL,
+	[Note Dt] [VARCHAR](50) NULL,
+	[Maturity Dt] [VARCHAR](50) NULL,
+	[Orig Disb Amt] [VARCHAR](50) NULL,
+	[Int Rate] [VARCHAR](50) NULL,
+	[Rate Last Bill] [VARCHAR](50) NULL,
+	[Loan Type] [VARCHAR](50) NULL,
+	[Fund Dt] [VARCHAR](50) NULL,
+	[Due Date (1st)] [VARCHAR](50) NULL,
+	[Due Date] [VARCHAR](50) NULL,
+	[Dt Last Activity] [VARCHAR](50) NULL,
+	[Balloon Dt] [VARCHAR](50) NULL,
+	[Amort Term] [VARCHAR](50) NULL,
+	[Amort Rem Term] [VARCHAR](50) NULL,
+	[Amort Maturity Dt] [VARCHAR](50) NULL,
+	[Loan Term] [VARCHAR](50) NULL,
+	[Loan Rem Term (DB)] [VARCHAR](50) NULL,
+	[Prin   P&I Pmt] [VARCHAR](50) NULL,
+	[Rev Credit?] [VARCHAR](50) NULL,
+	[UCC Req?] [VARCHAR](50) NULL,
+	[Date Last Bill] [VARCHAR](50) NULL,
+	[Bal Last Bill] [VARCHAR](50) NULL,
+	[Int Rate Margin] [VARCHAR](50) NULL,
+	[Max Int Rate] [VARCHAR](50) NULL,
+	[Min Int Rate] [VARCHAR](50) NULL,
+	[Int Only End Dt] [VARCHAR](50) NULL,
+	[Orig LTV] [VARCHAR](50) NULL,
+	[Unapplied] [VARCHAR](50) NULL,
+	[Misc Fees] [VARCHAR](50) NULL,
+	[Total Disb Amt] [VARCHAR](50) NULL,
+	[Max Loan Amt] [VARCHAR](50) NULL,
+	[Unpaid Late Chrg] [VARCHAR](50) NULL,
+	[Ytd Prin] [VARCHAR](50) NULL,
+	[Ytd Int] [VARCHAR](50) NULL,
+	[Ytd Late Chrg] [VARCHAR](50) NULL,
+	[30 Days] [VARCHAR](50) NULL,
+	[60 Days] [VARCHAR](50) NULL,
+	[90 Days+] [VARCHAR](50) NULL,
+	[Days Delinquent] [VARCHAR](50) NULL,
+	[Entire Loan Amount including other participants] [VARCHAR](50) NULL,
+	[Loan Amount] [VARCHAR](50) NULL,
+	[Neighbors Naming Convention] [VARCHAR](50) NULL,
+	[Type of Business Loan] [VARCHAR](50) NULL,
+	[MBL?] [VARCHAR](50) NULL,
+	[Commercial?] [VARCHAR](50) NULL,
+	[Sic Code] [VARCHAR](50) NULL,
+	[Sic Code Description] [VARCHAR](50) NULL,
+	[FHLB Classification] [VARCHAR](50) NULL,
+	[Loan Type Code] [VARCHAR](50) NULL,
+	[Participation?] [VARCHAR](50) NULL,
+	[If Participation Percentage Owned] [VARCHAR](50) NULL,
+	[Lead Lender       Y or N] [VARCHAR](50) NULL,
+	[Limit] [VARCHAR](50) NULL,
+	[Unfunded Amount Available] [VARCHAR](50) NULL,
+	[Index and Margin] [VARCHAR](Max) NULL,
+	[Term] [VARCHAR](50) NULL,
+	[Loan Rating] [VARCHAR](50) NULL,
+	[Loan Loss Percentage] [VARCHAR](50) NULL,
+	[Loss Allowance Calculation] [VARCHAR](50) NULL,
+	[Owner   Primary Contact(s)] [VARCHAR](50) NULL,
+	[Exception  No Global Cash Flow Analysis] [VARCHAR](50) NULL,
+	[Exception  Does not have unlimited personal guarantees] [VARCHAR](50) NULL,
+	[Exception  LTV exceeds policy limits] [VARCHAR](50) NULL,
+	[Match Number for Call Report (Grouping loans by associated borrower)] [VARCHAR](50) NULL,
+	[CECL  Lien Position (1, 2)] [VARCHAR](500) NULL,
+	[CECL  Senior Original Balance] [VARCHAR](Max) NULL,
+	[CECL  Date of DSCR] [VARCHAR](50) NULL,
+	[CECL  Most recent DSCR, Individual (not Global), Proforma DSCR if applicable, HBS DSCR calculation ] [VARCHAR](50) NULL,
+	[Credit memo has Addendum with different DSCR (Yes or No)] [VARCHAR](50) NULL,
+	[Global DSCR] [VARCHAR](50) NULL,
+	[nCino Loan Type] [VARCHAR](50) NULL,
+	[Orig Credit Score] [VARCHAR](50) NULL,
+	[Curr Credit Score] [VARCHAR](max) NULL
+	)
+
+
+
+DECLARE @SQL VARCHAR(MAX)
+SET @SQL = \'
+
+BULK INSERT #temptable 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		--FORMAT=\'\'CSV\'\',
+		FIRSTROW = 2,
+		
+		FIELDTERMINATOR = \'\'|\'\',
+		ROWTERMINATOR = \'\'0x0a\'\' 
+		
+		
+		);\'
+
+
+EXEC(@SQL)
+--SELECT * FROM #temptable
+--DECLARE @lastdate DATE = (SELECT CAST(CONVERT(VARCHAR,MAX(ASOFDATE),101) AS DATE) ASOFDATE FROM #temptable)
+
+DELETE FROM [NCino Data Files].dbo.staging_commercial WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
+INSERT INTO [NCino Data Files].dbo.staging_commercial  (
+
+	[Asofdate]
+      ,[Loan Number]
+      ,[Member Number]
+      ,[CECL Status - (Active, Closed)]
+      ,[Paid Off Date]
+      ,[Borr Name]
+      ,[Borr Addr 1]
+      ,[Borr Addr 2]
+      ,[Borr City]
+      ,[Borr St]
+      ,[Borr Zip]
+      ,[Borr Phone]
+      ,[Borr SSN TIN]
+      ,[Principal]
+      ,[Note Dt]
+      ,[Maturity Dt]
+      ,[Orig Disb Amt]
+      ,[Int Rate]
+      ,[Rate Last Bill]
+      ,[Loan Type]
+      ,[Fund Dt]
+      ,[Due Date (1st)]
+      ,[Due Date]
+      ,[Dt Last Activity]
+      ,[Balloon Dt]
+      ,[Amort Term]
+      ,[Amort Rem Term]
+      ,[Amort Maturity Dt]
+      ,[Loan Term]
+      ,[Loan Rem Term (DB)]
+      ,[Prin   P&I Pmt]
+      ,[Rev Credit?]
+      ,[UCC Req?]
+      ,[Date Last Bill]
+      ,[Bal Last Bill]
+      ,[Int Rate Margin]
+      ,[Max Int Rate]
+      ,[Min Int Rate]
+      ,[Int Only End Dt]
+      ,[Orig LTV]
+      ,[Unapplied]
+      ,[Misc Fees]
+      ,[Total Disb Amt]
+      ,[Max Loan Amt]
+      ,[Unpaid Late Chrg]
+      ,[Ytd Prin]
+      ,[Ytd Int]
+      ,[Ytd Late Chrg]
+      ,[30 Days]
+      ,[60 Days]
+      ,[90 Days+]
+      ,[Days Delinquent]
+      ,[Entire Loan Amount including other participants]
+      ,[Loan Amount]
+      ,[Neighbors Naming Convention]
+      ,[Type of Business Loan]
+      ,[MBL?]
+      ,[Commercial?]
+      ,[Sic Code]
+      ,[Sic Code Description]
+      ,[FHLB Classification]
+      ,[Loan Type Code]
+      ,[Participation?]
+      ,[If Participation Percentage Owned]
+      ,[Lead Lender       Y or N]
+      ,[Limit]
+      ,[Unfunded Amount Available]
+      ,[Index and Margin]
+      ,[Term]
+      ,[Loan Rating]
+      ,[Loan Loss Percentage]
+      ,[Loss Allowance Calculation]
+      ,[Owner   Primary Contact(s)]
+      ,[Exception  No Global Cash Flow Analysis]
+      ,[Exception  Does not have unlimited personal guarantees]
+      ,[Exception  LTV exceeds policy limits]
+      ,[Match Number for Call Report (Grouping loans by associated borrower)]
+      ,[CECL  Lien Position (1, 2)]
+      ,[CECL  Senior Original Balance]
+      ,[CECL  Date of DSCR]
+      ,[CECL  Most recent DSCR, Individual (not Global), Proforma DSCR if applicable, HBS DSCR calculation ]
+      ,[Credit memo has Addendum with different DSCR (Yes or No)]
+      ,[Global DSCR]
+      ,[nCino Loan Type]
+      ,[Orig Credit Score]
+      ,[Curr Credit Score])
+
+SELECT @DATE [ASOFDATE], 
+    
+      [Loan Number]
+      ,[Member Number]
+      ,[CECL Status - (Active, Closed)]
+      ,[Paid Off Date]
+      ,[Borr Name]
+      ,[Borr Addr 1]
+      ,[Borr Addr 2]
+      ,[Borr City]
+      ,[Borr St]
+      ,[Borr Zip]
+      ,[Borr Phone]
+      ,[Borr SSN TIN]
+      ,[Principal]
+      ,[Note Dt]
+      ,[Maturity Dt]
+      ,[Orig Disb Amt]
+      ,[Int Rate]
+      ,[Rate Last Bill]
+      ,[Loan Type]
+      ,[Fund Dt]
+      ,[Due Date (1st)]
+      ,[Due Date]
+      ,[Dt Last Activity]
+      ,[Balloon Dt]
+      ,[Amort Term]
+      ,[Amort Rem Term]
+      ,[Amort Maturity Dt]
+      ,[Loan Term]
+      ,[Loan Rem Term (DB)]
+      ,[Prin   P&I Pmt]
+      ,[Rev Credit?]
+      ,[UCC Req?]
+      ,[Date Last Bill]
+      ,[Bal Last Bill]
+      ,[Int Rate Margin]
+      ,[Max Int Rate]
+      ,[Min Int Rate]
+      ,[Int Only End Dt]
+      ,[Orig LTV]
+      ,[Unapplied]
+      ,[Misc Fees]
+      ,[Total Disb Amt]
+      ,[Max Loan Amt]
+      ,[Unpaid Late Chrg]
+      ,[Ytd Prin]
+      ,[Ytd Int]
+      ,[Ytd Late Chrg]
+      ,[30 Days]
+      ,[60 Days]
+      ,[90 Days+]
+      ,[Days Delinquent]
+      ,[Entire Loan Amount including other participants]
+      ,[Loan Amount]
+      ,[Neighbors Naming Convention]
+      ,[Type of Business Loan]
+      ,[MBL?]
+      ,[Commercial?]
+      ,[Sic Code]
+      ,[Sic Code Description]
+      ,[FHLB Classification]
+      ,[Loan Type Code]
+      ,[Participation?]
+      ,[If Participation Percentage Owned]
+      ,[Lead Lender       Y or N]
+      ,[Limit]
+      ,[Unfunded Amount Available]
+      ,[Index and Margin]
+      ,[Term]
+      ,[Loan Rating]
+      ,[Loan Loss Percentage]
+      ,[Loss Allowance Calculation]
+      ,[Owner   Primary Contact(s)]
+      ,[Exception  No Global Cash Flow Analysis]
+      ,[Exception  Does not have unlimited personal guarantees]
+      ,[Exception  LTV exceeds policy limits]
+      ,[Match Number for Call Report (Grouping loans by associated borrower)]
+      ,[CECL  Lien Position (1, 2)]
+      ,[CECL  Senior Original Balance]
+      ,[CECL  Date of DSCR]
+      ,[CECL  Most recent DSCR, Individual (not Global), Proforma DSCR if applicable, HBS DSCR calculation ]
+      ,[Credit memo has Addendum with different DSCR (Yes or No)]
+      ,[Global DSCR]
+      ,[nCino Loan Type]
+      ,[Orig Credit Score]
+      ,[Curr Credit Score]
+FROM #temptable
+
+DROP TABLE IF EXISTS #temptable
+''' Timeout: 30 Result=> QueryResult
+/# LOAD DMI DATA
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @date date = \'%Year%-%Month%-%Day%\'
+DECLARE @YEAR int = CAST(DATEPART(yyyy,@Date) AS VARCHAR)
+DECLARE @MONTH INT = CAST(DATEPART(mm,@Date) AS VARCHAR)
+DECLARE @DAY INT = CAST(DATEPART(dd,@Date) AS VARCHAR)
+
+DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_DMI_pipe.csv\'
+
+DROP TABLE IF EXISTS #temptable
+
+CREATE TABLE #temptable(
+	
+	[loan_number] [VARCHAR](50) NULL,
+	[old_loan_number] [VARCHAR](50) NULL,
+	[investor_id] [VARCHAR](50) NULL,
+	[member_number] [VARCHAR](50) NULL,
+	[branch_office_code] [VARCHAR](50) NULL,
+	[mortgagor_last_name] [VARCHAR](50) NULL,
+	[next_payment_due_date] [VARCHAR](50) NULL,
+	[note_date] [VARCHAR](50) NULL,
+	[original_mortgage_amount] [VARCHAR](50) NULL,
+	[loan_matures_date] [VARCHAR](50) NULL,
+	[first_principal_balance] [VARCHAR](50) NULL,
+	[original_interest_rate] [VARCHAR](50) NULL,
+	[annual_interest_rate] [VARCHAR](50) NULL,
+	[first_p_and_i_amount] [VARCHAR](50) NULL,
+	[loan_term] [VARCHAR](50) NULL,
+	[arm_indicator] [VARCHAR](50) NULL,
+	[loan_purpose_code_description] [VARCHAR](50) NULL,
+	[arm_next_ir_effective_date] [VARCHAR](50) NULL,
+	[arm_ir_max_life_floor_rate] [VARCHAR](50) NULL,
+	[arm_ir_max_life_ceiling_rate] [VARCHAR](50) NULL,
+	[arm_ir_max_decrease_rate] [VARCHAR](50) NULL,
+	[arm_ir_max_increase_rate] [VARCHAR](50) NULL,
+	[arm_index_code_1] [VARCHAR](50) NULL,
+	[arm_index_code_1_description] [VARCHAR](50) NULL,
+	[Original Credit Score] [VARCHAR](50) NULL,
+	[Current Credit Score] [VARCHAR](50) NULL,
+	[Days Delinquent] [VARCHAR](50) NULL,
+	[LTV] [VARCHAR](50) NULL,
+	[Charge Off Date] [VARCHAR](50) NULL,
+	[Charge Off Amount] [VARCHAR](50) NULL,
+	[Recovery Amount] [VARCHAR](50) NULL)
+
+
+
+DECLARE @SQL VARCHAR(MAX)
+SET @SQL = \'
+
+BULK INSERT #temptable 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		
+		FIRSTROW = 2,
+		--FORMAT = \'\'CSV\'\',
+		FIELDTERMINATOR = \'\'|\'\',
+		ROWTERMINATOR = \'\'0x0a\'\' 
+		
+		
+		);\'
+
+
+EXEC(@SQL)
+
+--DECLARE @lastdate DATE = (SELECT CAST(CONVERT(VARCHAR,MAX(ASOFDATE),101) AS DATE) ASOFDATE FROM #temptable)
+
+DELETE FROM [NCino Data Files].dbo.STAGING_DMI WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
+INSERT INTO [NCino Data Files].dbo.STAGING_DMI (
+
+	[ASOFDATE]
+      ,[loan_number]
+      ,[old_loan_number]
+      ,[investor_id]
+      ,[member_number]
+      ,[branch_office_code]
+      ,[mortgagor_last_name]
+      ,[next_payment_due_date]
+      ,[note_date]
+      ,[original_mortgage_amount]
+      ,[loan_matures_date]
+      ,[first_principal_balance]
+      ,[original_interest_rate]
+      ,[annual_interest_rate]
+      ,[first_p_and_i_amount]
+      ,[loan_term]
+      ,[arm_indicator]
+      ,[loan_purpose_code_description]
+      ,[arm_next_ir_effective_date]
+      ,[arm_ir_max_life_floor_rate]
+      ,[arm_ir_max_life_ceiling_rate]
+      ,[arm_ir_max_decrease_rate]
+      ,[arm_ir_max_increase_rate]
+      ,[arm_index_code_1]
+      ,[arm_index_code_1_description]
+      ,[Original Credit Score]
+      ,[Current Credit Score]
+      ,[Days Delinquent]
+      ,[LTV]
+      ,[Charge Off Date]
+      ,[Charge Off Amount]
+      ,[Recovery Amount] )
+
+SELECT @DATE [ASOFDATE], 
+     [loan_number]
+      ,[old_loan_number]
+      ,[investor_id]
+      ,[member_number]
+      ,[branch_office_code]
+      ,[mortgagor_last_name]
+      ,[next_payment_due_date]
+      ,[note_date]
+      ,[original_mortgage_amount]
+      ,[loan_matures_date]
+      ,[first_principal_balance]
+      ,[original_interest_rate]
+      ,[annual_interest_rate]
+      ,[first_p_and_i_amount]
+      ,[loan_term]
+      ,[arm_indicator]
+      ,[loan_purpose_code_description]
+      ,[arm_next_ir_effective_date]
+      ,[arm_ir_max_life_floor_rate]
+      ,[arm_ir_max_life_ceiling_rate]
+      ,[arm_ir_max_decrease_rate]
+      ,[arm_ir_max_increase_rate]
+      ,[arm_index_code_1]
+      ,[arm_index_code_1_description]
+      ,[Original Credit Score]
+      ,[Current Credit Score]
+      ,[Days Delinquent]
+      ,[LTV]
+      ,[Charge Off Date]
+      ,[Charge Off Amount]
+      ,[Recovery Amount]
+FROM #temptable
+
+DROP TABLE IF EXISTS #temptable
+''' Timeout: 30 Result=> QueryResult
+/# LOAD LOANSOURCE DATA
+
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @date date = \'%Year%-%Month%-%Day%\'
+DECLARE @YEAR int = CAST(DATEPART(yyyy,@Date) AS VARCHAR)
+DECLARE @MONTH INT = CAST(DATEPART(mm,@Date) AS VARCHAR)
+DECLARE @DAY INT = CAST(DATEPART(dd,@Date) AS VARCHAR)
+
+DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_LoanSource_pipe.csv\'
+
+DROP TABLE IF EXISTS #temptable
+
+CREATE TABLE #temptable(
+	[Asset Class] [VARCHAR](50) NULL,
+	[Servicer] [VARCHAR](50) NULL,
+	[Loan Number] [VARCHAR](50) NULL,
+	[CRIF Acct #] [VARCHAR](50) NULL,
+	[SSN] [VARCHAR](50) NULL,
+	[Pool #] [VARCHAR](50) NULL,
+	[Loan Report Code] [VARCHAR](50) NULL,
+	[ Current Balance ] [VARCHAR](50) NULL,
+	[ Current Balance - Neighbors CU ] [VARCHAR](50) NULL,
+	[Balance Date] [VARCHAR](50) NULL,
+	[ Amount Financed ] [VARCHAR](50) NULL,
+	[ Amt Fin - Neighbors CU ] [VARCHAR](50) NULL,
+	[I O Flag] [VARCHAR](50) NULL,
+	[Original Term] [VARCHAR](50) NULL,
+	[Current Term] [VARCHAR](50) NULL,
+	[ Pmt Amt Recv\'d ] [VARCHAR](50) NULL,
+	[ Pmt Amt Recvd - Neighbors CU ] [VARCHAR](50) NULL,
+	[ Principal Pmt ] [VARCHAR](50) NULL,
+	[ Principal Pmt - Neighbors CU ] [VARCHAR](50) NULL,
+	[ Interest Pmt ] [VARCHAR](50) NULL,
+	[ Interest Pmt - Neighbors CU ] [VARCHAR](50) NULL,
+	[ Pmt Amt Due ] [VARCHAR](50) NULL,
+	[ Pmt Amt Due - Neighbors CU ] [VARCHAR](50) NULL,
+	[Original Rate] [VARCHAR](50) NULL,
+	[Current Rate] [VARCHAR](50) NULL,
+	[ Servicing Fee ] [VARCHAR](50) NULL,
+	[ Servicing Fee - Neighbors CU ] [VARCHAR](50) NULL,
+	[Modified Flag] [VARCHAR](50) NULL,
+	[Next Due Date] [VARCHAR](50) NULL,
+	[Last Payment Date] [VARCHAR](50) NULL,
+	[Days Past Due] [VARCHAR](50) NULL,
+	[Charge Off Date] [VARCHAR](50) NULL,
+	[ Charge Off Amount ] [VARCHAR](50) NULL,
+	[ Charge Off Amt - Neighbors CU ] [VARCHAR](50) NULL,
+	[Pay Off Date] [VARCHAR](50) NULL,
+	[ Payoff Amt ] [VARCHAR](50) NULL,
+	[Rate Change Date] [VARCHAR](50) NULL,
+	[Adjustment Frequency] [VARCHAR](50) NULL,
+	[Orig FICO Score] [VARCHAR](50) NULL,
+	[Account Status] [VARCHAR](50) NULL,
+	[LTV at Orig] [VARCHAR](50) NULL,
+	[DTI] [VARCHAR](50) NULL,
+	[Last Name First Name] [VARCHAR](50) NULL,
+	[Address] [VARCHAR](50) NULL,
+	[City] [VARCHAR](50) NULL,
+	[St] [VARCHAR](50) NULL,
+	[ZIP] [VARCHAR](50) NULL,
+	[Loan Type] [VARCHAR](50) NULL,
+	[Loan Purpose] [VARCHAR](50) NULL,
+	[Owner Type] [VARCHAR](50) NULL,
+	[Maturity Date] [VARCHAR](50) NULL,
+	[Make] [VARCHAR](50) NULL,
+	[Model] [VARCHAR](50) NULL,
+	[Model Year] [VARCHAR](50) NULL,
+	[New Used] [VARCHAR](50) NULL,
+	[Credit Grade Tier] [VARCHAR](50) NULL,
+	[VIN] [VARCHAR](50) NULL,
+	[ Recovery ] [VARCHAR](50) NULL,
+	[Non-Cash Pmt] [VARCHAR](50) NULL,
+	[Withdrawal Reserve Funding] [VARCHAR](50) NULL,
+	[Shortfall] [VARCHAR](50) NULL,
+	[Purchased Interest] [VARCHAR](50) NULL,
+	[ Dealer Fee to Amort ] [VARCHAR](50) NULL,
+	[ Dealer Fee - Neighbors CU ] [VARCHAR](50) NULL,
+	[Aimbridge Fee] [VARCHAR](50) NULL,
+	[Aim Fee - Neighbors CU] [VARCHAR](50) NULL,
+	[ CULS Fee ] [VARCHAR](50) NULL,
+	[ CULS Fee - Neighbors CU ] [VARCHAR](50) NULL,
+	[Percent Owned] [VARCHAR](50) NULL,
+	[Global Loan Amt] [VARCHAR](50) NULL,
+	[Report Category] [VARCHAR](50) NULL,
+	[Note Date] [VARCHAR](50) NULL,
+	[Funding Date] [VARCHAR](50) NULL,
+	[Interest Calculation Method] [VARCHAR](50) NULL,
+	[Billing Code] [VARCHAR](50) NULL,
+	[Date 1st Payment Date] [VARCHAR](50) NULL,
+	[ Unpaid Late Chrg ] [VARCHAR](50) NULL,
+	[Interest Type] [VARCHAR](50) NULL,
+	[P&I Pmt Type] [VARCHAR](50) NULL,
+	[ Daily Interest ] [VARCHAR](50) NULL,
+	[Revolving Credit] [VARCHAR](50) NULL,
+	[ Payment Amount ] [VARCHAR](50) NULL,
+	[ Pmt AMt - Neighbors CU ] [VARCHAR](50) NULL,
+	[Interest PTD-Date] [VARCHAR](50) NULL,
+	[ Interest PTD-Amt ] [VARCHAR](50) NULL,
+	[ Int PTD - Amt - Neighbors CU ] [VARCHAR](50) NULL,
+	[Pmt Accumulation] [VARCHAR](50) NULL,
+	[Billing Method] [VARCHAR](50) NULL,
+	[Amortized Interest ONY] [VARCHAR](50) NULL,
+	[Neighbors CU Loan #] [VARCHAR](50) NULL,
+	[Pmt Frequency] [VARCHAR](50) NULL,
+	[FICO Refresh Score] [VARCHAR](50) NULL,
+	[FICO Refresh Date] [VARCHAR](50) NULL,
+	[ Accrued Interest ] [VARCHAR](50) NULL,
+	[Accrued Interest-Neighbors CU] [VARCHAR](50) NULL,
+	[ Monthly_Dealer_Fee_Amortization ] [VARCHAR](50) NULL,
+	[ Monthly_CULS_Fee_Amorization ] [VARCHAR](50) NULL,
+	[AcctRefNo] [VARCHAR](50) NULL,
+	[Status Codes CSV] [VARCHAR](Max) NULL,
+	[Is Loan Outstanding] [VARCHAR](50) NULL,
+	[BK Indicator] [VARCHAR](50) NULL,
+	[Days Late 30] [VARCHAR](50) NULL,
+	[Days Late 60] [VARCHAR](50) NULL,
+	[Days Late 90] [VARCHAR](50) NULL,
+	[Dealer Number] [VARCHAR](50) NULL,
+	[ Original Amount Dealer Reserve ] [VARCHAR](50) NULL,
+	[ Original Amount CULS Fee ] [VARCHAR](50) NULL,
+	[Current Month Recovery Income] [VARCHAR](50) NULL,
+	[Current Month Recovery Expense] [VARCHAR](50) NULL,
+	[ Contractual Pmt ] [VARCHAR](50) NULL,
+	[ Contractual Pmt-Neighbors CU ] [VARCHAR](50) NULL,
+	[Approving Officer] [VARCHAR](50) NULL,
+	[Small Bal Write Off] [VARCHAR](50) NULL,
+	[Small Bal Write Off-Neighbors CU] [VARCHAR](50) NULL,
+	[ Current Month Recovery ] [VARCHAR](50) NULL,
+	[ Current Month Recovery-Neighbors CU ] [VARCHAR](50) NULL
+	)
+
+
+
+DECLARE @SQL VARCHAR(MAX)
+SET @SQL = \'
+
+BULK INSERT #temptable 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		
+		FIRSTROW = 2,
+		--FORMAT=\'\'CSV\'\',
+		FIELDTERMINATOR = \'\'|\'\',
+		ROWTERMINATOR = \'\'0x0a\'\'  
+		
+		
+		);\'
+
+
+EXEC(@SQL)
+
+--DECLARE @lastdate DATE = (SELECT CAST(CONVERT(VARCHAR,MAX(ASOFDATE),101) AS DATE) ASOFDATE FROM #temptable)
+
+DELETE FROM [NCino Data Files].dbo.STAGING_LOANSOURCE WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
+INSERT INTO [NCino Data Files].dbo.STAGING_LOANSOURCE  (
+
+	[ASOFDATE]
+      ,[Asset Class]
+      ,[Servicer]
+      ,[Loan Number]
+      ,[CRIF Acct #]
+      ,[SSN]
+      ,[Pool #]
+      ,[Loan Report Code]
+      ,[ Current Balance ]
+      ,[ Current Balance - Neighbors CU ]
+      ,[Balance Date]
+      ,[ Amount Financed ]
+      ,[ Amt Fin - Neighbors CU ]
+      ,[I O Flag]
+      ,[Original Term]
+      ,[Current Term]
+      ,[ Pmt Amt Recv\'d ]
+      ,[ Pmt Amt Recvd - Neighbors CU ]
+      ,[ Principal Pmt ]
+      ,[ Principal Pmt - Neighbors CU ]
+      ,[ Interest Pmt ]
+      ,[ Interest Pmt - Neighbors CU ]
+      ,[ Pmt Amt Due ]
+      ,[ Pmt Amt Due - Neighbors CU ]
+      ,[Original Rate]
+      ,[Current Rate]
+      ,[ Servicing Fee ]
+      ,[ Servicing Fee - Neighbors CU ]
+      ,[Modified Flag]
+      ,[Next Due Date]
+      ,[Last Payment Date]
+      ,[Days Past Due]
+      ,[Charge Off Date]
+      ,[ Charge Off Amount ]
+      ,[ Charge Off Amt - Neighbors CU ]
+      ,[Pay Off Date]
+      ,[ Payoff Amt ]
+      ,[Rate Change Date]
+      ,[Adjustment Frequency]
+      ,[Orig FICO Score]
+      ,[Account Status]
+      ,[LTV at Orig]
+      ,[DTI]
+      ,[Last Name First Name]
+      ,[Address]
+      ,[City]
+      ,[St]
+      ,[ZIP]
+      ,[Loan Type]
+      ,[Loan Purpose]
+      ,[Owner Type]
+      ,[Maturity Date]
+      ,[Make]
+      ,[Model]
+      ,[Model Year]
+      ,[New Used]
+      ,[Credit Grade Tier]
+      ,[VIN]
+      ,[ Recovery ]
+      ,[Non-Cash Pmt]
+      ,[Withdrawal Reserve Funding]
+      ,[Shortfall]
+      ,[Purchased Interest]
+      ,[ Dealer Fee to Amort ]
+      ,[ Dealer Fee - Neighbors CU ]
+      ,[Aimbridge Fee]
+      ,[Aim Fee - Neighbors CU]
+      ,[ CULS Fee ]
+      ,[ CULS Fee - Neighbors CU ]
+      ,[Percent Owned]
+      ,[Global Loan Amt]
+      ,[Report Category]
+      ,[Note Date]
+      ,[Funding Date]
+      ,[Interest Calculation Method]
+      ,[Billing Code]
+      ,[Date 1st Payment Date]
+      ,[ Unpaid Late Chrg ]
+      ,[Interest Type]
+      ,[P&I Pmt Type]
+      ,[ Daily Interest ]
+      ,[Revolving Credit]
+      ,[ Payment Amount ]
+      ,[ Pmt AMt - Neighbors CU ]
+      ,[Interest PTD-Date]
+      ,[ Interest PTD-Amt ]
+      ,[ Int PTD - Amt - Neighbors CU ]
+      ,[Pmt Accumulation]
+      ,[Billing Method]
+      ,[Amortized Interest ONY]
+      ,[Neighbors CU Loan #]
+      ,[Pmt Frequency]
+      ,[FICO Refresh Score]
+      ,[FICO Refresh Date]
+      ,[ Accrued Interest ]
+      ,[Accrued Interest-Neighbors CU]
+      ,[ Monthly_Dealer_Fee_Amortization ]
+      ,[ Monthly_CULS_Fee_Amorization ]
+      ,[AcctRefNo]
+      ,[Status Codes CSV]
+      ,[Is Loan Outstanding]
+      ,[BK Indicator]
+      ,[Days Late 30]
+      ,[Days Late 60]
+      ,[Days Late 90]
+      ,[Dealer Number]
+      ,[ Original Amount Dealer Reserve ]
+      ,[ Original Amount CULS Fee ]
+      ,[Current Month Recovery Income]
+      ,[Current Month Recovery Expense]
+      ,[ Contractual Pmt ]
+      ,[ Contractual Pmt-Neighbors CU ]
+      ,[Approving Officer]
+      ,[Small Bal Write Off]
+      ,[Small Bal Write Off-Neighbors CU]
+      ,[ Current Month Recovery ]
+      ,[ Current Month Recovery-Neighbors CU ])
+
+SELECT @DATE [ASOFDATE], 
+    
+      [Asset Class]
+      ,[Servicer]
+      ,[Loan Number]
+      ,[CRIF Acct #]
+      ,[SSN]
+      ,[Pool #]
+      ,[Loan Report Code]
+      ,[ Current Balance ]
+      ,[ Current Balance - Neighbors CU ]
+      ,[Balance Date]
+      ,[ Amount Financed ]
+      ,[ Amt Fin - Neighbors CU ]
+      ,[I O Flag]
+      ,[Original Term]
+      ,[Current Term]
+      ,[ Pmt Amt Recv\'d ]
+      ,[ Pmt Amt Recvd - Neighbors CU ]
+      ,[ Principal Pmt ]
+      ,[ Principal Pmt - Neighbors CU ]
+      ,[ Interest Pmt ]
+      ,[ Interest Pmt - Neighbors CU ]
+      ,[ Pmt Amt Due ]
+      ,[ Pmt Amt Due - Neighbors CU ]
+      ,[Original Rate]
+      ,[Current Rate]
+      ,[ Servicing Fee ]
+      ,[ Servicing Fee - Neighbors CU ]
+      ,[Modified Flag]
+      ,[Next Due Date]
+      ,[Last Payment Date]
+      ,[Days Past Due]
+      ,[Charge Off Date]
+      ,[ Charge Off Amount ]
+      ,[ Charge Off Amt - Neighbors CU ]
+      ,[Pay Off Date]
+      ,[ Payoff Amt ]
+      ,[Rate Change Date]
+      ,[Adjustment Frequency]
+      ,[Orig FICO Score]
+      ,[Account Status]
+      ,[LTV at Orig]
+      ,[DTI]
+      ,[Last Name First Name]
+      ,[Address]
+      ,[City]
+      ,[St]
+      ,[ZIP]
+      ,[Loan Type]
+      ,[Loan Purpose]
+      ,[Owner Type]
+      ,[Maturity Date]
+      ,[Make]
+      ,[Model]
+      ,[Model Year]
+      ,[New Used]
+      ,[Credit Grade Tier]
+      ,[VIN]
+      ,[ Recovery ]
+      ,[Non-Cash Pmt]
+      ,[Withdrawal Reserve Funding]
+      ,[Shortfall]
+      ,[Purchased Interest]
+      ,[ Dealer Fee to Amort ]
+      ,[ Dealer Fee - Neighbors CU ]
+      ,[Aimbridge Fee]
+      ,[Aim Fee - Neighbors CU]
+      ,[ CULS Fee ]
+      ,[ CULS Fee - Neighbors CU ]
+      ,[Percent Owned]
+      ,[Global Loan Amt]
+      ,[Report Category]
+      ,[Note Date]
+      ,[Funding Date]
+      ,[Interest Calculation Method]
+      ,[Billing Code]
+      ,[Date 1st Payment Date]
+      ,[ Unpaid Late Chrg ]
+      ,[Interest Type]
+      ,[P&I Pmt Type]
+      ,[ Daily Interest ]
+      ,[Revolving Credit]
+      ,[ Payment Amount ]
+      ,[ Pmt AMt - Neighbors CU ]
+      ,[Interest PTD-Date]
+      ,[ Interest PTD-Amt ]
+      ,[ Int PTD - Amt - Neighbors CU ]
+      ,[Pmt Accumulation]
+      ,[Billing Method]
+      ,[Amortized Interest ONY]
+      ,[Neighbors CU Loan #]
+      ,[Pmt Frequency]
+      ,[FICO Refresh Score]
+      ,[FICO Refresh Date]
+      ,[ Accrued Interest ]
+      ,[Accrued Interest-Neighbors CU]
+      ,[ Monthly_Dealer_Fee_Amortization ]
+      ,[ Monthly_CULS_Fee_Amorization ]
+      ,[AcctRefNo]
+      ,[Status Codes CSV]
+      ,[Is Loan Outstanding]
+      ,[BK Indicator]
+      ,[Days Late 30]
+      ,[Days Late 60]
+      ,[Days Late 90]
+      ,[Dealer Number]
+      ,[ Original Amount Dealer Reserve ]
+      ,[ Original Amount CULS Fee ]
+      ,[Current Month Recovery Income]
+      ,[Current Month Recovery Expense]
+      ,[ Contractual Pmt ]
+      ,[ Contractual Pmt-Neighbors CU ]
+      ,[Approving Officer]
+      ,[Small Bal Write Off]
+      ,[Small Bal Write Off-Neighbors CU]
+      ,[ Current Month Recovery ]
+      ,[ Current Month Recovery-Neighbors CU ]
+FROM #temptable
+
+DROP TABLE IF EXISTS #temptable
+''' Timeout: 30 Result=> QueryResult
+/# LOAD PSCU DATA
+
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @date date = \'%Year%-%Month%-%Day%\'
+DECLARE @YEAR int = CAST(DATEPART(yyyy,@Date) AS VARCHAR)
+DECLARE @MONTH INT = CAST(DATEPART(mm,@Date) AS VARCHAR)
+DECLARE @DAY INT = CAST(DATEPART(dd,@Date) AS VARCHAR)
+
+DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_PSCU_pipe.csv\'
+
+DROP TABLE IF EXISTS #temptable
+
+CREATE TABLE #temptable(
+	
+	[OM System Number] [VARCHAR](50) NULL,
+	[OM Principal Number] [VARCHAR](50) NULL,
+	[OM Agent Number] [VARCHAR](50) NULL,
+	[Card Account Number] [VARCHAR](50) NULL,
+	[Card Open Date] [VARCHAR](50) NULL,
+	[Cardholder Savings Account Number] [VARCHAR](50) NULL,
+	[Card External Status] [VARCHAR](50) NULL,
+	[Card Internal Status] [VARCHAR](50) NULL,
+	[Cash Base Interest Rate] [VARCHAR](50) NULL,
+	[Cash Annual Interest Rate] [VARCHAR](50) NULL,
+	[Cash Annual Interest Rate Minimum] [VARCHAR](50) NULL,
+	[Cash Annual Interest Rate Maximum] [VARCHAR](50) NULL,
+	[Purchase Base Interest Rate] [VARCHAR](50) NULL,
+	[Purchase Annual Interest Rate] [VARCHAR](50) NULL,
+	[Purchase Annual Interest Rate Minimum] [VARCHAR](50) NULL,
+	[Purchase Annual Interest Rate Maximum] [VARCHAR](50) NULL,
+	[Credit Line Amount] [VARCHAR](50) NULL,
+	[Credit Line Last Review Date] [VARCHAR](50) NULL,
+	[Current Balance Amount] [VARCHAR](50) NULL,
+	[Last Statement Average Daily Balance Amount] [VARCHAR](50) NULL,
+	[Delinquent Days Count] [VARCHAR](50) NULL,
+	[Last Payment Amount] [VARCHAR](50) NULL,
+	[Last Payment Date] [VARCHAR](50) NULL,
+	[Next Payment Due Date] [VARCHAR](50) NULL,
+	[Automatic Payment Method] [VARCHAR](MAX) NULL,
+	[Automatic Payment Designated Amount] [VARCHAR](MAX) NULL,
+	[Dispute Amount] [VARCHAR](MAX) NULL,
+	[Dispute Transaction Date] [VARCHAR](50) NULL,
+	[Historical Dispute Count] [VARCHAR](50) NULL,
+	[Delinquent Total Amount] [VARCHAR](50) NULL,
+	[Delinquent Cycles Count] [VARCHAR](50) NULL,
+	[Collector Code] [VARCHAR](50) NULL,
+	[Charge Off Date] [VARCHAR](50) NULL,
+	[Charge Off Amount] [VARCHAR](50) NULL,
+	[Charge Off Closed Reason] [VARCHAR](50) NULL,
+	[Year to Date 1 Cycle Delinquent Count] [VARCHAR](50) NULL,
+	[Year to Date 2 Cycles Delinquent Count] [VARCHAR](50) NULL,
+	[Year to Date 3 Cycles Delinquent Count] [VARCHAR](50) NULL,
+	[Year to Date Purchase Interest Amount] [VARCHAR](50) NULL,
+	[Year to Date Cash Advance Interest Amount] [VARCHAR](50) NULL,
+	[Previous Year Cash Advance Count] [VARCHAR](50) NULL,
+	[Year to Date Overlimit Fee Amount] [VARCHAR](50) NULL,
+	[Annual Fee Assessment Code] [VARCHAR](5000) NULL,
+	[Annual Fee Assessment Date] [VARCHAR](MAX) NULL,
+	[Last Statement Balance Amount] [VARCHAR](MAX) NULL,
+	[Last Statement Late Fee Amount] [VARCHAR](MAX) NULL,
+	[Last Statement Minimum Payment Due Amount] [VARCHAR](MAX) NULL,
+	[Primary Cardholder First Name] [VARCHAR](MAX) NULL,
+	[Primary Cardholder Last Name] [VARCHAR](Max) NULL,
+	[Secondary Cardholder First Name] [VARCHAR](500) NULL,
+	[Secondary Cardholder Last Name] [VARCHAR](500) NULL,
+	[Primary Cardholder Date of Birth] [VARCHAR](50) NULL,
+	[Primary Cardholder Social Security Number] [VARCHAR](50) NULL,
+	[Secondary Cardholder Date of Birth] [VARCHAR](50) NULL,
+	[Secondary Cardholder Social Security Number] [VARCHAR](50) NULL,
+	[Primary Cardholder Address Line 1] [VARCHAR](50) NULL,
+	[Primary Cardholder Address Line 2] [VARCHAR](50) NULL,
+	[Primary Cardholder City] [VARCHAR](50) NULL,
+	[Primary Cardholder State] [VARCHAR](50) NULL,
+	[Primary Cardholder Zip Code] [VARCHAR](50) NULL,
+	[Primary Cardholder Primary Phone] [VARCHAR](50) NULL,
+	[Card Program] [VARCHAR](50) NULL,
+	[Credit Score] [VARCHAR](50) NULL,
+	[Credit Score Date] [VARCHAR](50) NULL,
+	[Credit Bureau Score] [VARCHAR](50) NULL,
+	[Credit Bureau Score Date] [VARCHAR](50) NULL,
+	[Miscellaneous Field 3] [VARCHAR](50) NULL,
+	[Card Expiration Date] [VARCHAR](MAX) NULL)
+
+
+
+DECLARE @SQL VARCHAR(MAX)
+SET @SQL = \'
+
+BULK INSERT #temptable 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+        
+		
+		FIRSTROW = 2,
+		--FORMAT = \'\'CSV\'\',
+		FIELDTERMINATOR = \'\'|\'\',
+		ROWTERMINATOR = \'\'0x0a\'\' 
+		
+		
+		);\'
+
+
+EXEC(@SQL)
+
+--SELECT * FROM #temptable
+
+--DECLARE @lastdate DATE = (SELECT CAST(CONVERT(VARCHAR,MAX(ASOFDATE),101) AS DATE) ASOFDATE FROM #temptable)
+
+DELETE FROM [NCino Data Files].dbo.STAGING_PSCU WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
+
+INSERT INTO [NCino Data Files].dbo.STAGING_PSCU
+
+
+
+SELECT  *, @date ASOFDATE FROM #temptable
+
+DROP TABLE IF EXISTS #temptable''' Timeout: 30 Result=> QueryResult
+/# LOAD RAYMOND JAMES DATA
+
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @date date = \'%Year%-%Month%-%Day%\'
+DECLARE @YEAR int = CAST(DATEPART(yyyy,@Date) AS VARCHAR)
+DECLARE @MONTH INT = CAST(DATEPART(mm,@Date) AS VARCHAR)
+DECLARE @DAY INT = CAST(DATEPART(dd,@Date) AS VARCHAR)
+
+DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_RaymondJames.csv\'
+
+DROP TABLE IF EXISTS #temptable
+
+CREATE TABLE #temptable(
+	[Account] [VARCHAR](50) NULL,
+	[Loan ID] [VARCHAR](50) NULL,
+	[Borrower] [VARCHAR](50) NULL,
+	[Pool] [VARCHAR](50) NULL,
+	[Loan Type] [VARCHAR](50) NULL,
+	[New or Used] [VARCHAR](50) NULL,
+	[Original Balance] [VARCHAR](50) NULL,
+	[Balance] [VARCHAR](50) NULL,
+	[Open Date] [VARCHAR](50) NULL,
+	[APR] [VARCHAR](50) NULL,
+	[Payment] [VARCHAR](50) NULL,
+	[Security] [VARCHAR](Max) NULL,
+	[Last Credit Date] [VARCHAR](50) NULL,
+	[Interest Accrued] [VARCHAR](Max) NULL,
+	[Daily Interest] [VARCHAR](Max) NULL,
+	[Maturity] [VARCHAR](max) NULL,
+	[Projected Maturity Date] [VARCHAR](50) NULL,
+	[Full Account Number] [VARCHAR](50) NULL,
+	[Last Transaction Date] [VARCHAR](50) NULL,
+	[Next Payment Due] [VARCHAR](50) NULL,
+	[Days Past Due] [VARCHAR](50) NULL,
+	[Amount Past Due] [VARCHAR](50) NULL,
+	[Balance at Sale] [VARCHAR](50) NULL,
+	[MTD Begin Date] [VARCHAR](50) NULL,
+	[MTD End Date] [VARCHAR](50) NULL,
+	[MTD Principal Paid] [VARCHAR](50) NULL,
+	[MTD Interest Paid] [VARCHAR](50) NULL,
+	[Adjustment] [VARCHAR](50) NULL,
+	[Final MTD Interest Paid] [VARCHAR](50) NULL,
+	[MTD Late Charge Paid] [VARCHAR](50) NULL,
+	[Payoff Date] [VARCHAR](50) NULL,
+	[Term] [VARCHAR](50) NULL,
+	[Current Term] [VARCHAR](50) NULL,
+	[Remaining Term] [VARCHAR](50) NULL,
+	[Charge off Date] [VARCHAR](50) NULL,
+	[Charge Off Amount] [VARCHAR](50) NULL,
+	[Bankruptcy] [VARCHAR](50) NULL,
+	[Note Number] [VARCHAR](50) NULL,
+	[Ownership Percent] [VARCHAR](50) NULL,
+	[Ownership Balance] [VARCHAR](50) NULL,
+	[Ownership Interest Accrued] [VARCHAR](50) NULL,
+	[Sale Date] [VARCHAR](50) NULL,
+	[FICO] [VARCHAR](50) NULL,
+	[LTV] [VARCHAR](50) NULL,
+	[DTI] [VARCHAR](50) NULL,
+	[modelYear] [VARCHAR](50) NULL,
+	[make] [VARCHAR](50) NULL,
+	[model] [VARCHAR](Max) NULL
+	)
+
+
+
+DECLARE @SQL VARCHAR(MAX)
+SET @SQL = \'
+
+BULK INSERT #temptable 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		--FORMAT=\'\'CSV\'\',
+		FIRSTROW = 2,
+		--FIELDQUOTE = \'\'\"\'\',
+		FIELDTERMINATOR = \'\'|\'\',
+		ROWTERMINATOR = \'\'0x0a\'\' 
+		
+		
+		);\'
+
+
+EXEC(@SQL)
+
+--DECLARE @lastdate DATE = (SELECT CAST(CONVERT(VARCHAR,MAX(ASOFDATE),101) AS DATE) ASOFDATE FROM #temptable)
+
+DELETE FROM [NCino Data Files].dbo.staging_RaymondJames WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
+
+
+INSERT INTO [NCino Data Files].dbo.staging_RaymondJames  (
+
+	[Asofdate]
+      ,[Account]
+      ,[Loan ID]
+      ,[Borrower]
+      ,[Pool]
+      ,[Loan Type]
+      ,[New or Used]
+      ,[Original Balance]
+      ,[Balance]
+      ,[Open Date]
+      ,[APR]
+      ,[Payment]
+      ,[Security]
+      ,[Last Credit Date]
+      ,[Interest Accrued]
+      ,[Daily Interest]
+      ,[Maturity]
+      ,[Projected Maturity Date]
+      ,[Full Account Number]
+      ,[Last Transaction Date]
+      ,[Next Payment Due]
+      ,[Days Past Due]
+      ,[Amount Past Due]
+      ,[Balance at Sale]
+      ,[MTD Begin Date]
+      ,[MTD End Date]
+      ,[MTD Principal Paid]
+      ,[MTD Interest Paid]
+      ,[Adjustment]
+      ,[Final MTD Interest Paid]
+      ,[MTD Late Charge Paid]
+      ,[Payoff Date]
+      ,[Term]
+      ,[Current Term]
+      ,[Remaining Term]
+      ,[Charge off Date]
+      ,[Charge Off Amount]
+      ,[Bankruptcy]
+      ,[Note Number]
+      ,[Ownership Percent]
+      ,[Ownership Balance]
+      ,[Ownership Interest Accrued]
+      ,[Sale Date]
+      ,[FICO]
+      ,[LTV]
+      ,[DTI]
+      ,[modelYear]
+      ,[make]
+      ,[model])
+
+SELECT @DATE [ASOFDATE], 
+    
+      [Account]
+      ,[Loan ID]
+      ,[Borrower]
+      ,[Pool]
+      ,[Loan Type]
+      ,[New or Used]
+      ,[Original Balance]
+      ,[Balance]
+      ,[Open Date]
+      ,[APR]
+      ,[Payment]
+      ,[Security]
+      ,[Last Credit Date]
+      ,[Interest Accrued]
+      ,[Daily Interest]
+      ,[Maturity]
+      ,[Projected Maturity Date]
+      ,[Full Account Number]
+      ,[Last Transaction Date]
+      ,[Next Payment Due]
+      ,[Days Past Due]
+      ,[Amount Past Due]
+      ,[Balance at Sale]
+      ,[MTD Begin Date]
+      ,[MTD End Date]
+      ,[MTD Principal Paid]
+      ,[MTD Interest Paid]
+      ,[Adjustment]
+      ,[Final MTD Interest Paid]
+      ,[MTD Late Charge Paid]
+      ,[Payoff Date]
+      ,[Term]
+      ,[Current Term]
+      ,[Remaining Term]
+      ,[Charge off Date]
+      ,[Charge Off Amount]
+      ,[Bankruptcy]
+      ,[Note Number]
+      ,[Ownership Percent]
+      ,[Ownership Balance]
+      ,[Ownership Interest Accrued]
+      ,[Sale Date]
+      ,[FICO]
+      ,[LTV]
+      ,[DTI]
+      ,[modelYear]
+      ,[make]
+      ,[model]
+FROM #temptable
+
+DROP TABLE IF EXISTS #temptable''' Timeout: 30 Result=> QueryResult
+/# LOAD PSL DATA
+
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @date date = \'%Year%-%Month%-%Day%\'
+DECLARE @YEAR int = CAST(DATEPART(yyyy,@Date) AS VARCHAR)
+DECLARE @MONTH INT = CAST(DATEPART(mm,@Date) AS VARCHAR)
+DECLARE @DAY INT = CAST(DATEPART(dd,@Date) AS VARCHAR)
+
+DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_PSL.txt\'
+
+DROP TABLE IF EXISTS #temptable
+
+CREATE TABLE #temptable(
+	[ASOFDATE] [VARCHAR](50) NULL,
+	[Lender_ID] [VARCHAR](50) NULL,
+	[Lender_Name] [VARCHAR](50) NULL,
+	[Orig_Lender_ID] [VARCHAR](50) NULL,
+	[Orig_Lender_Name] [VARCHAR](5000) NULL,
+	[Lender_Role] [VARCHAR](50) NULL,
+	[Loan_Participation] [VARCHAR](50) NULL,
+	[Loan_ID] [VARCHAR](50) NULL,
+	[Risk_Score] [VARCHAR](50) NULL,
+	[Rate_Grade] [VARCHAR](50) NULL,
+	[Cosigned] [VARCHAR](50) NULL,
+	[Base_Rate_Type] [VARCHAR](50) NULL,
+	[Curr_Base_Rate_Pct] [VARCHAR](50) NULL,
+	[Margin_Pct] [VARCHAR](50) NULL,
+	[Current_Rate_Pct] [VARCHAR](50) NULL,
+	[Average_Weighted_Int_Rate] [VARCHAR](50) NULL,
+	[Insured] [VARCHAR](50) NULL,
+	[Loan_Status] [VARCHAR](50) NULL,
+	[1st_Repay_Date] [VARCHAR](50) NULL,
+	[Final_Mat_Date] [VARCHAR](50) NULL,
+	[Application_Date] [VARCHAR](50) NULL,
+	[First_Disbursement_Date] [VARCHAR](50) NULL,
+	[Program_Name] [VARCHAR](50) NULL,
+	[Program_Type] [VARCHAR](50) NULL,
+	[Program_Year] [VARCHAR](50) NULL,
+	[Origination_Fee_Pct] [VARCHAR](50) NULL,
+	[Servicing_Fee_Pct] [VARCHAR](50) NULL,
+	[Existing_Borrower] [VARCHAR](50) NULL,
+	[Borr_ID] [VARCHAR](50) NULL,
+	[Borr_FName] [VARCHAR](50) NULL,
+	[Borr_LName] [VARCHAR](50) NULL,
+	[Borr_State] [VARCHAR](50) NULL,
+	[Borr_FICO] [VARCHAR](50) NULL,
+	[CoSigner_FName] [VARCHAR](50) NULL,
+	[CoSigner_LName] [VARCHAR](50) NULL,
+	[CoSigner_FICO] [VARCHAR](50) NULL,
+	[School_Code] [VARCHAR](50) NULL,
+	[School_Name] [VARCHAR](5000) NULL,
+	[CDR_Pct] [VARCHAR](Max) NULL,
+	[Insurance_Program_Year] [VARCHAR](50) NULL,
+	[Insurance_Tier] [VARCHAR](50) NULL,
+	[All_Disbursements_Bal_-_Original_Loan] [VARCHAR](50) NULL,
+	[All_Disbursements_Bal_-_Original_Lender] [VARCHAR](50) NULL,
+	[Orig_Fee_-_Borr_Loan] [VARCHAR](50) NULL,
+	[Orig_Fee_-_Borr_Lender] [VARCHAR](50) NULL,
+	[Loan_Cancellation_Loan_Level] [VARCHAR](50) NULL,
+	[Loan_Cancellation_Lender] [VARCHAR](50) NULL,
+	[Loan_Bal_-_Original_Loan] [VARCHAR](50) NULL,
+	[Loan_Bal_-_Original_Lender] [VARCHAR](50) NULL,
+	[Loan_Bal_-_Beg_Month_Loan] [VARCHAR](50) NULL,
+	[Loan_Bal_-_Beg_Month_Lender] [VARCHAR](50) NULL,
+	[Loan_Bal_-_Month_End_Loan] [VARCHAR](50) NULL,
+	[Loan_Bal_-_Month_End_Lender] [VARCHAR](50) NULL,
+	[Accrued_Int_-_Month_End_Loan] [VARCHAR](50) NULL,
+	[Accrued_Int_-_Month_End_Lender] [VARCHAR](50) NULL,
+	[Num_of_Disbursements] [VARCHAR](50) NULL,
+	[Curr_Month_Disb_Number] [VARCHAR](50) NULL,
+	[Curr_Month_Disb_Date] [VARCHAR](50) NULL,
+	[Curr_Month_Disb_Amt_Loan] [VARCHAR](50) NULL,
+	[Curr_Month_Disb_Amt_Lender] [VARCHAR](50) NULL,
+	[Num_Disbursements_Made] [VARCHAR](50) NULL,
+	[Amount_Disbursed_Loan] [VARCHAR](50) NULL,
+	[Amount_Disbursed_Lender] [VARCHAR](50) NULL,
+	[Num_Disbursements_Remaining] [VARCHAR](50) NULL,
+	[Amount_Remaining_Loan] [VARCHAR](50) NULL,
+	[Amount_Remaining_Lender] [VARCHAR](50) NULL,
+	[Borr_Pmt_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Borr_Pmt_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Int_Pmt_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Int_Pmt_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Prin_Pmt_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Prin_Pmt_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Late_Pmt_Fees_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Late_Pmt_Fees_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[NSF_Fees_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[NSF_Fees_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Other_Fees_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Other_Fees_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Accrued_Int_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Accrued_Int_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Cap_Int_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Cap_Int_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Borr_Pmt_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Borr_Pmt_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Int_Pmt_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Int_Pmt_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Prin_Pmt_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Prin_Pmt_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Late_Pmt_Fees_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Late_Pmt_Fees_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[NSF_Fees_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[NSF_Fees_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Other_Fees_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Other_Fees_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Accrued_Int_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Accrued_Int_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Cap_Int_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Cap_Int_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Orig_Expense_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Orig_Expense_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Serv_Expense_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Serv_Expense_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Serv_Expense_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Serv_Expense_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Payment_Type] [VARCHAR](50) NULL,
+	[Loan_Condition] [VARCHAR](50) NULL,
+	[Days_Delinquent] [VARCHAR](50) NULL,
+	[Next_Due_Date] [VARCHAR](50) NULL,
+	[(Total_Loan)_Past_Due] [VARCHAR](50) NULL,
+	[(Total_Loan)_Current_Due_Amount] [VARCHAR](50) NULL,
+	[(Total_Loan)_Total_Due] [VARCHAR](50) NULL,
+	[Total_Charge_Off_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Total_Charge_Off_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Net_Defaults_Loan] [VARCHAR](50) NULL,
+	[Net_Defaults_Lender] [VARCHAR](50) NULL,
+	[Default_Recoveries_Loan] [VARCHAR](50) NULL,
+	[Default_Recoveries_Lender] [VARCHAR](50) NULL,
+	[Total_Forbearance_Months] [VARCHAR](50) NULL,
+	[Current_Forbearance_Start] [VARCHAR](50) NULL,
+	[Current_Forbearance_End] [VARCHAR](50) NULL,
+	[Waived_Late_Fees_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Waived_Late_Fees_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Waived_NSF_Fees_Loan] [VARCHAR](50) NULL,
+	[Waived_NSF_Fees_Lender] [VARCHAR](50) NULL,
+	[Borrower_Account_Number] [VARCHAR](50) NULL,
+	[Orig_Expense_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Orig_Expense_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[School_Cert_Expense_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[School_Cert_Expense_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[School_Cert_Expense_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[School_Cert_Expense_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Disb_Cost_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Disb_Cost_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Disb_Cost_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Disb_Cost_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Pre_Disb_Cancellation_Loan] [VARCHAR](50) NULL,
+	[Pre_Disb_Cancellation_Lender] [VARCHAR](50) NULL,
+	[Late_Fees_Due_-_Month_End_Loan] [VARCHAR](50) NULL,
+	[Late_Fees_Due_-_Month_End_Lender] [VARCHAR](50) NULL,
+	[Assessed_Late_Fees_-_Monthly_Loan] [VARCHAR](50) NULL,
+	[Assessed_Late_Fees_-_Monthly_Lender] [VARCHAR](50) NULL,
+	[Assessed_Late_Fees_-_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Assessed_Late_Fees_-_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Charge_Off_Prin_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Charge_Off_Prin_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Charge_Off_Interest_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Charge_Off_Interest_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Charge_Off_Late_Fees_Lifetime_Loan] [VARCHAR](50) NULL,
+	[Charge_Off_Late_Fees_Lifetime_Lender] [VARCHAR](50) NULL,
+	[Charge_Off_Prin_Monthly_Loan] [VARCHAR](50) NULL,
+	[Charge_Off_Prin_Monthly_Lender] [VARCHAR](50) NULL,
+	[Charge_Off_Interest_Monthly_Loan] [VARCHAR](50) NULL,
+	[Charge_Off_Interest_Monthly_Lender] [VARCHAR](50) NULL,
+	[Charge_Off_Late_Fees_Monthly_Loan] [VARCHAR](50) NULL,
+	[Charge_Off_Late_Fees_Monthly_Lender] [VARCHAR](50) NULL,
+	[Total_Charge_Off_Monthly_Loan] [VARCHAR](50) NULL,
+	[Total_Charge_Off_Monthly_Lender] [VARCHAR](50) NULL,
+	[Waived_Late_Fees_Monthly_Loan] [VARCHAR](50) NULL,
+	[Waived_Late_Fees_Monthly_Lender] [VARCHAR](50) NULL,
+	[Term_To_Maturity_Months] [VARCHAR](50) NULL,
+	[Last_Payment_Date] [VARCHAR](50) NULL,
+	[Loan_Insured_By] [VARCHAR](50) NULL,
+	[Loan_Status_Last_Updated] [VARCHAR](50) NULL,
+	[Original_Base_Rate] [VARCHAR](50) NULL,
+	[Borrower_Bankruptcy_Chapter] [VARCHAR](50) NULL,
+	[Cosigner_Bankruptcy_Chapter] [VARCHAR](50) NULL,
+	[Billing_Cycle] [VARCHAR](50) NULL,
+	[Degree_Type] [VARCHAR](50) NULL,
+	[Payment_Method] [VARCHAR](50) NULL,
+	[Cosigner_Release_Date] [VARCHAR](Max) NULL)
+
+
+
+DECLARE @SQL VARCHAR(MAX)
+SET @SQL = \'
+
+BULK INSERT #temptable 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		
+		FIRSTROW = 2,
+		
+		FIELDTERMINATOR = \'\'|\'\',
+		ROWTERMINATOR = \'\'0x0a\'\' 
+		
+		
+		);\'
+
+
+EXEC(@SQL)
+
+DECLARE @lastdate DATE = (SELECT CAST(CONVERT(VARCHAR,MAX(ASOFDATE),101) AS DATE) ASOFDATE FROM #temptable)
+
+DELETE FROM [NCino Data Files].dbo.STAGING_STUDENT WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
+INSERT INTO [NCino Data Files].dbo.STAGING_STUDENT
+SELECT * FROM #temptable
+
+DROP TABLE IF EXISTS #temptable
+''' Timeout: 30 Result=> QueryResult
+/# LOAD XP2 DATA
+
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @date date = \'%Year%-%Month%-%Day%\'
+DECLARE @YEAR int = CAST(DATEPART(yyyy,@Date) AS VARCHAR)
+DECLARE @MONTH INT = CAST(DATEPART(mm,@Date) AS VARCHAR)
+DECLARE @DAY INT = CAST(DATEPART(dd,@Date) AS VARCHAR)
+
+DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_Loans_pipe.csv\'
+
+DROP TABLE IF EXISTS #temptable
+
+CREATE TABLE #temptable(
+	
+	[MEMBER_NBR] [VARCHAR](50) NULL,
+	[LOAN_NBR] [VARCHAR](50) NULL,
+	[COLLATERAL_ID] [VARCHAR](50) NULL,
+	[CURRENT_VALUE] [VARCHAR](50) NULL,
+	[VALUE_VERF_DATE] [VARCHAR](50) NULL,
+	[VALUE_VERIFIED_BY] [VARCHAR](50) NULL,
+	[TIN] [VARCHAR](50) NULL,
+	[DEALER_CODE] [VARCHAR](50) NULL,
+	[BRANCH] [VARCHAR](50) NULL,
+	[LOAN_TYPE] [VARCHAR](50) NULL,
+	[TYPE_DESC] [VARCHAR](50) NULL,
+	[IS_WRITTEN_OFF] [VARCHAR](50) NULL,
+	[CLOSED] [VARCHAR](50) NULL,
+	[WOFF_AMOUNT] [VARCHAR](50) NULL,
+	[WOFF_DATE] [VARCHAR](50) NULL,
+	[WOFF_TOT_RECOV_AMT] [VARCHAR](50) NULL,
+	[RATE] [VARCHAR](50) NULL,
+	[LIMIT] [VARCHAR](50) NULL,
+	[NETB] [VARCHAR](50) NULL,
+	[GROSSB] [VARCHAR](50) NULL,
+	[GROSSA] [VARCHAR](50) NULL,
+	[NETA] [VARCHAR](50) NULL,
+	[DAYSDEL] [VARCHAR](50) NULL,
+	[TIMES_DELQ_30_DAYS] [VARCHAR](50) NULL,
+	[TIMES_DELQ_60_DAYS] [VARCHAR](50) NULL,
+	[TIMES_DELQ_90_DAYS] [VARCHAR](50) NULL,
+	[PMT_HISTORY] [VARCHAR](50) NULL,
+	[SCHEDULED_PMT] [VARCHAR](50) NULL,
+	[FREQ] [VARCHAR](50) NULL,
+	[NEXT_DUE_DATE] [VARCHAR](50) NULL,
+	[INT_ACCRUED] [VARCHAR](50) NULL,
+	[INT_LTD] [VARCHAR](50) NULL,
+	[OFFICER] [VARCHAR](50) NULL,
+	[ORIG_TERM] [VARCHAR](50) NULL,
+	[MONTHLY_TERM] [VARCHAR](50) NULL,
+	[LOAN TYPE 2] [VARCHAR] (50) NULL,
+	[FINAL_PMT_DATE] [VARCHAR](50) NULL,
+	[ORIG_RATE] [VARCHAR](50) NULL,
+	[ORIG_AMT] [VARCHAR](50) NULL,
+	[BOOKDATE] [VARCHAR](50) NULL,
+	[OPEN_DATE] [VARCHAR](50) NULL,
+	[BALANCE] [VARCHAR](50) NULL,
+	[LOAN_MOD] [VARCHAR](50) NULL,
+	[RE_LOAN_MOD] [VARCHAR](50) NULL,
+	[PURPCODE] [VARCHAR](50) NULL,
+	[ORIG_FICO] [VARCHAR](50) NULL,
+	[APPLICATION_FICO] [VARCHAR](50) NULL,
+	[BK_FLAG] [VARCHAR](50) NULL,
+	[ADDRESS1] [VARCHAR](50) NULL,
+	[ADDRESS2] [VARCHAR](50) NULL,
+	[CITY] [VARCHAR](50) NULL,
+	[COUNTY] [VARCHAR](50) NULL,
+	[FIRST_NAME] [VARCHAR](50) NULL,
+	[LAST_NAME] [VARCHAR](50) NULL,
+	[D1NAME] [VARCHAR](50) NULL,
+	[MIDDLE_NAME] [VARCHAR](50) NULL,
+	[STATE] [VARCHAR](50) NULL,
+	[ZIP_STR] [VARCHAR](50) NULL,
+	[GENDER] [VARCHAR](50) NULL,
+	[BIRTH_DATE] [VARCHAR](50) NULL,
+	[RE_APPRAISED_VALUE] [VARCHAR](50) NULL,
+	[RE_APPRAISED_DATE] [VARCHAR](50) NULL,
+	[RE_ORIG_APPRAISED_VALUE] [VARCHAR](50) NULL,
+	[COLMAKE] [VARCHAR](50) NULL,
+	[COLMODEL] [VARCHAR](50) NULL,
+	[COLYEAR] [VARCHAR](50) NULL,
+	[COLVIN] [VARCHAR](50) NULL,
+	[COLADDRESS1] [VARCHAR](50) NULL,
+	[COLCITY] [VARCHAR](50) NULL,
+	[COLSTATE] [VARCHAR](50) NULL,
+	[COLZIP] [VARCHAR](50) NULL,
+	[COLADDRESS1_3] [VARCHAR](50) NULL,
+	[COLADDRESS2_3] [VARCHAR](50) NULL,
+	[COLCITY_3] [VARCHAR](50) NULL,
+	[COLSTATE_3] [VARCHAR](50) NULL,
+	[COLZIP_3] [VARCHAR](50) NULL,
+	[COLPURCHASEPRICE_3] [VARCHAR](50) NULL,
+	[COLRESIDENCETYPE_3] [VARCHAR](50) NULL)
+
+
+
+DECLARE @SQL VARCHAR(MAX)
+SET @SQL = \'
+
+BULK INSERT #temptable 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		
+		FIRSTROW = 2,
+		
+		FIELDTERMINATOR = \'\'|\'\',
+		ROWTERMINATOR = \'\'0x0a\'\'
+		
+		
+		);\'
+
+
+EXEC(@SQL)
+
+--DECLARE @lastdate DATE = (SELECT CAST(CONVERT(VARCHAR,MAX(ASOFDATE),101) AS DATE) ASOFDATE FROM #temptable)
+
+DELETE FROM [NCino Data Files].dbo.STAGING_XP WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
+INSERT INTO [NCino Data Files].dbo.STAGING_XP (
+
+	[ASOFDATE]
+      ,[MEMBER_NBR]
+      ,[LOAN_NBR]
+      ,[COLLATERAL_ID]
+      ,[CURRENT_VALUE]
+      ,[VALUE_VERF_DATE]
+      ,[VALUE_VERIFIED_BY]
+      ,[TIN]
+      ,[DEALER_CODE]
+      ,[BRANCH]
+      ,[LOAN_TYPE]
+      ,[TYPE_DESC]
+      ,[IS_WRITTEN_OFF]
+      ,[CLOSED]
+      ,[WOFF_AMOUNT]
+      ,[WOFF_DATE]
+      ,[WOFF_TOT_RECOV_AMT]
+      ,[RATE]
+      ,[LIMIT]
+      ,[NETB]
+      ,[GROSSB]
+      ,[GROSSA]
+      ,[NETA]
+      ,[DAYSDEL]
+      ,[TIMES_DELQ_30_DAYS]
+      ,[TIMES_DELQ_60_DAYS]
+      ,[TIMES_DELQ_90_DAYS]
+      ,[PMT_HISTORY]
+      ,[SCHEDULED_PMT]
+      ,[FREQ]
+      ,[NEXT_DUE_DATE]
+      ,[INT_ACCRUED]
+      ,[INT_LTD]
+      ,[OFFICER]
+      ,[ORIG_TERM]
+      ,[MONTHLY_TERM]
+      ,[FINAL_PMT_DATE]
+      ,[ORIG_RATE]
+      ,[ORIG_AMT]
+      ,[BOOKDATE]
+      ,[OPEN_DATE]
+      ,[BALANCE]
+      ,[LOAN_MOD]
+      ,[RE_LOAN_MOD]
+      ,[PURPCODE]
+      ,[ORIG_FICO]
+      ,[APPLICATION_FICO]
+      ,[BK_FLAG]
+      ,[ADDRESS1]
+      ,[ADDRESS2]
+      ,[CITY]
+      ,[COUNTY]
+      ,[FIRST_NAME]
+      ,[LAST_NAME]
+      ,[D1NAME]
+      ,[MIDDLE_NAME]
+      ,[STATE]
+      ,[ZIP_STR]
+      ,[GENDER]
+      ,[BIRTH_DATE]
+      ,[RE_APPRAISED_VALUE]
+      ,[RE_APPRAISED_DATE]
+      ,[RE_ORIG_APPRAISED_VALUE]
+      ,[COLMAKE]
+      ,[COLMODEL]
+      ,[COLYEAR]
+      ,[COLVIN]
+      ,[COLADDRESS1]
+      ,[COLCITY]
+      ,[COLSTATE]
+      ,[COLZIP]
+      ,[COLADDRESS1_3]
+      ,[COLADDRESS2_3]
+      ,[COLCITY_3]
+      ,[COLSTATE_3]
+      ,[COLZIP_3]
+      ,[COLPURCHASEPRICE_3]
+      ,[COLRESIDENCETYPE_3] )
+
+SELECT @DATE [ASOFDATE], 
+[MEMBER_NBR]
+      ,[LOAN_NBR]
+      ,[COLLATERAL_ID]
+      ,[CURRENT_VALUE]
+      ,[VALUE_VERF_DATE]
+      ,[VALUE_VERIFIED_BY]
+      ,[TIN]
+      ,[DEALER_CODE]
+      ,[BRANCH]
+      ,[LOAN_TYPE]
+      ,[TYPE_DESC]
+      ,[IS_WRITTEN_OFF]
+      ,[CLOSED]
+      ,[WOFF_AMOUNT]
+      ,[WOFF_DATE]
+      ,[WOFF_TOT_RECOV_AMT]
+      ,[RATE]
+      ,[LIMIT]
+      ,[NETB]
+      ,[GROSSB]
+      ,[GROSSA]
+      ,[NETA]
+      ,[DAYSDEL]
+      ,[TIMES_DELQ_30_DAYS]
+      ,[TIMES_DELQ_60_DAYS]
+      ,[TIMES_DELQ_90_DAYS]
+      ,[PMT_HISTORY]
+      ,[SCHEDULED_PMT]
+      ,[FREQ]
+      ,[NEXT_DUE_DATE]
+      ,[INT_ACCRUED]
+      ,[INT_LTD]
+      ,[OFFICER]
+      ,[ORIG_TERM]
+      ,[MONTHLY_TERM]
+      ,[FINAL_PMT_DATE]
+      ,[ORIG_RATE]
+      ,[ORIG_AMT]
+      ,[BOOKDATE]
+      ,[OPEN_DATE]
+      ,[BALANCE]
+      ,[LOAN_MOD]
+      ,[RE_LOAN_MOD]
+      ,[PURPCODE]
+      ,[ORIG_FICO]
+      ,[APPLICATION_FICO]
+      ,[BK_FLAG]
+      ,[ADDRESS1]
+      ,[ADDRESS2]
+      ,[CITY]
+      ,[COUNTY]
+      ,[FIRST_NAME]
+      ,[LAST_NAME]
+      ,[D1NAME]
+      ,[MIDDLE_NAME]
+      ,[STATE]
+      ,[ZIP_STR]
+      ,[GENDER]
+      ,[BIRTH_DATE]
+      ,[RE_APPRAISED_VALUE]
+      ,[RE_APPRAISED_DATE]
+      ,[RE_ORIG_APPRAISED_VALUE]
+      ,[COLMAKE]
+      ,[COLMODEL]
+      ,[COLYEAR]
+      ,[COLVIN]
+      ,[COLADDRESS1]
+      ,[COLCITY]
+      ,[COLSTATE]
+      ,[COLZIP]
+      ,[COLADDRESS1_3]
+      ,[COLADDRESS2_3]
+      ,[COLCITY_3]
+      ,[COLSTATE_3]
+      ,[COLZIP_3]
+      ,[COLPURCHASEPRICE_3]
+      ,[COLRESIDENCETYPE_3]
+FROM #temptable WHERE MEMBER_NBR is NOT null
+
+DROP TABLE IF EXISTS #temptable
+''' Timeout: 30 Result=> QueryResult
+/# LOAD LOANSTREET DATA
+
+#/
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @date date = \'%Year%-%Month%-%Day%\'
+DECLARE @YEAR int = 2025 --CAST(DATEPART(yyyy,@Date) AS VARCHAR)
+DECLARE @MONTH INT = 07 --CAST(DATEPART(mm,@Date) AS VARCHAR)
+DECLARE @DAY INT = 31 --CAST(DATEPART(dd,@Date) AS VARCHAR)
+
+DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_CULoanStreet_pipe.csv\'
+
+DROP TABLE IF EXISTS #temptable
+
+CREATE TABLE #temptable(
+	
+	[LoanStreet ID] [VARCHAR](50) NULL,
+	[Internal Loan ID] [VARCHAR](50) NULL,
+	[Originator] [VARCHAR](50) NULL,
+	[Ticker] [VARCHAR](50) NULL,
+	[Pool ID] [VARCHAR](50) NULL,
+	[Ownership] [VARCHAR](50) NULL,
+	[Original Principal] [VARCHAR](50) NULL,
+	[Principal Outstanding Prior to Period] [VARCHAR](50) NULL,
+	[Principal Owned Prior to Period] [VARCHAR](50) NULL,
+	[Principal Outstanding at Period End] [VARCHAR](50) NULL,
+	[Principal Owned at Period End] [VARCHAR](50) NULL,
+	[Accounts Payable] [VARCHAR](50) NULL,
+	[Current Interest Rate] [VARCHAR](50) NULL,
+	[Servicing Spread] [VARCHAR](50) NULL,
+	[Loan Sale Date] [VARCHAR](50) NULL,
+	[Origination Date] [VARCHAR](50) NULL,
+	[Maturity Date] [VARCHAR](50) NULL,
+	[Loan Type] [VARCHAR](50) NULL,
+	[Collateral Condition (if Auto)] [VARCHAR](50) NULL,
+	[Is Indirect? (if Vehicle)] [VARCHAR](50) NULL,
+	[Credit Score] [VARCHAR](50) NULL,
+	[Last Principal Payment Date] [VARCHAR](50) NULL,
+	[Next Payment Date] [VARCHAR](50) NULL,
+	[Full Accrued but Unpaid Interest] [VARCHAR](50) NULL,
+	[Owned Accrued but Unpaid Interest (less servicing spread)] [VARCHAR](50) NULL,
+	[Latest Reported Performance] [VARCHAR](50) NULL,
+	[Days Delinquent] [VARCHAR](50) NULL,
+	[Performance Reported as of] [VARCHAR](50) NULL,
+	[Charged Off Amount] [VARCHAR](50) NULL,
+	[Charge Off Amount Owned] [VARCHAR](50) NULL,
+	[Charged Off Date] [VARCHAR](50) NULL,
+	[Recovery Amount] [VARCHAR](50) NULL,
+	[Recovery Amount Owned] [VARCHAR](50) NULL,
+	[In Default] [VARCHAR](50) NULL,
+	[Default Date] [VARCHAR](50) NULL,
+	[In Bankruptcy] [VARCHAR](50) NULL,
+	[Bankruptcy Date] [VARCHAR](50) NULL,
+	[In Repossession] [VARCHAR](50) NULL,
+	[Repossession Date] [VARCHAR](50) NULL,
+	[Repaid in Full] [VARCHAR](50) NULL,
+	[Repaid in Full Date] [VARCHAR](50) NULL,
+	[Active Vote?] [VARCHAR](50) NULL)
+
+
+
+DECLARE @SQL VARCHAR(MAX)
+SET @SQL = \'
+
+BULK INSERT #temptable 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		
+		FIRSTROW = 2,
+		
+		FIELDTERMINATOR = \'\'|\'\',
+		ROWTERMINATOR = \'\'0x0a\'\' 
+		
+		
+		);\'
+
+
+EXEC(@SQL)
+
+
+DELETE FROM [NCino Data Files].dbo.STAGING_LOANSTREET WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
+INSERT INTO [NCino Data Files].dbo.STAGING_LOANSTREET (
+ [asofdate]
+,[LoanStreet ID]
+      ,[Internal Loan ID]
+      ,[Originator]
+      ,[Ticker]
+      ,[Pool ID]
+      ,[Ownership]
+      ,[Original Principal]
+      ,[Principal Outstanding Prior to Period]
+      ,[Principal Owned Prior to Period]
+      ,[Principal Outstanding at Period End]
+      ,[Principal Owned at Period End]
+      ,[Accounts Payable]
+      ,[Current Interest Rate]
+      ,[Servicing Spread]
+      ,[Loan Sale Date]
+      ,[Origination Date]
+      ,[Maturity Date]
+      ,[Loan Type]
+      ,[Collateral Condition (if Auto)]
+      ,[Is Indirect? (if Vehicle)]
+      ,[Credit Score]
+      ,[Last Principal Payment Date]
+      ,[Next Payment Date]
+      ,[Full Accrued but Unpaid Interest]
+      ,[Owned Accrued but Unpaid Interest (less servicing spread)]
+      ,[Latest Reported Performance]
+      ,[Days Delinquent]
+      ,[Performance Reported as of]
+      ,[Charged Off Amount]
+      ,[Charged Off Date]
+      ,[Recovery Amount]
+      ,[In Default]
+      ,[Default Date]
+      ,[In Bankruptcy]
+      ,[Bankruptcy Date]
+      ,[In Repossession]
+      ,[Repossession Date]
+      ,[Repaid in Full]
+      ,[Repaid in Full Date]
+      ,[Active Vote?]
+      ,[Charge Off Amount Owned]
+      ,[Recovery Amount Owned] )
+
+	
+
+SELECT @DATE [ASOFDATE] 
+
+      ,[LoanStreet ID]
+      ,[Internal Loan ID]
+      ,[Originator]
+      ,[Ticker]
+      ,[Pool ID]
+      ,[Ownership]
+      ,[Original Principal]
+      ,[Principal Outstanding Prior to Period]
+      ,[Principal Owned Prior to Period]
+      ,[Principal Outstanding at Period End]
+      ,[Principal Owned at Period End]
+      ,[Accounts Payable]
+      ,[Current Interest Rate]
+      ,[Servicing Spread]
+      ,[Loan Sale Date]
+      ,[Origination Date]
+      ,[Maturity Date]
+      ,[Loan Type]
+      ,[Collateral Condition (if Auto)]
+      ,[Is Indirect? (if Vehicle)]
+      ,[Credit Score]
+      ,[Last Principal Payment Date]
+      ,[Next Payment Date]
+      ,[Full Accrued but Unpaid Interest]
+      ,[Owned Accrued but Unpaid Interest (less servicing spread)]
+      ,[Latest Reported Performance]
+      ,[Days Delinquent]
+      ,[Performance Reported as of]
+      ,[Charged Off Amount]
+      ,[Charged Off Date]
+      ,[Recovery Amount]
+      ,[In Default]
+      ,[Default Date]
+      ,[In Bankruptcy]
+      ,[Bankruptcy Date]
+      ,[In Repossession]
+      ,[Repossession Date]
+      ,[Repaid in Full]
+      ,[Repaid in Full Date]
+      ,[Active Vote?]
+      ,[Charge Off Amount Owned]
+      ,[Recovery Amount Owned]
+FROM #temptable 
+DROP TABLE IF EXISTS #temptable
+''' Timeout: 30 Result=> QueryResult
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS DMI FACT LOAN
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temptable1
+SELECT
+ A.ACCOUNT_NUMBER, A.ASOFDATE
+ 
+ INTO #TEMPTABLE1 
+ 
+ FROM (
+
+SELECT loan_number ACCOUNT_NUMBER, ASOFDATE, ROW_NUMBER() OVER (PARTITION BY loan_number ORDER BY ASOFDATE DESC) AS ROWNUM FROM [NCino Data Files].dbo.staging_DMI ) A 
+WHERE A.ROWNUM = 1
+
+
+DELETE FROM [DW-LPA].DBO.FACT_LOAN WHERE [DATA SOURCE] = \'DMI\' AND Unique_ID IN (SELECT CONVERT(VARCHAR,loan_number)+\'_DMI\' FROM [NCino Data Files].DBO.STAGING_DMI)
+INSERT INTO [DW-LPA].DBO.Fact_Loan
+
+SELECT DISTINCT
+
+\'L\' [RecordID]
+      , A.ACCOUNT_NUMBER [AccountNumber]
+	 , CASE WHEN B.loan_purpose_code_description = \'REFINANCE/NO CASH OUT\' THEN \'9999028\'
+	         WHEN B.loan_purpose_code_description = \'REFINANCE/PROPERTY IMPROVEMENT\' THEN \'9999029\'
+			 WHEN B.loan_purpose_code_description = \'REFINANCE/EQUITY TAKEOUT\' THEN \'9999030\'
+			 ELSE \'9999031\' END [LOAN TYPE]
+	 , CASE
+	WHEN investor_id = \'28R\' 
+	THEN 0.00
+	WHEN investor_id = \'28T\'
+	THEN 0.00
+	WHEN investor_id = \'28S\'
+	THEN CAST(B.first_p_and_i_amount AS FLOAT) * 1
+	ELSE CAST(B.first_p_and_i_amount AS FLOAT)
+	END [PaymentAmount]
+	--, B.first_p_and_i_amount PaymentAmount
+      ,B.loan_purpose_code_description [PurposeCode] 
+      ,B.loan_term [LoanTerm]
+     ,\'30\' [PaymentFrequencyCode]
+      ,B.note_date [DateofLoan]
+      , CASE
+	WHEN investor_id = \'28R\' 
+	THEN 0.00
+	WHEN investor_id = \'28T\'
+	THEN 0.00
+	WHEN investor_id = \'28S\'
+	THEN CAST(B.original_mortgage_amount AS FLOAT) * 1
+	ELSE CAST(B.original_mortgage_amount AS FLOAT)
+	END [OriginalLoanAmount]
+	--, B.original_mortgage_amount OriginalLoanAmount
+       ,\'\'[InterestRateCode]
+	  ,B.annual_interest_rate [RATE]
+     ,\'\' [LoanOfficer]
+    
+	--, B.original_mortgage_amount CreditLimit
+      
+      ,B.[Original Credit Score] [OriginalCreditScore]
+	  
+	, CASE
+	WHEN investor_id = \'28R\' 
+	THEN 0.00
+	WHEN investor_id = \'28T\'
+	THEN 0.00
+	WHEN investor_id = \'28S\'
+	THEN IIF(CONVERT(MONEY,B.[Charge Off Amount])>0.00, CONVERT(MONEY,B.[Charge Off Amount]) - CONVERT(MONEY,b.[Recovery Amount]),0.00) * 1
+	ELSE IIF(CONVERT(MONEY,B.[Charge Off Amount])>0.00, CONVERT(MONEY,B.[Charge Off Amount]) - CONVERT(MONEY,b.[Recovery Amount]),0.00)
+	END  
+	--, B.[Charge Off Amount]
+   ,B.[Charge Off Date]   [CODate]
+	  ,NULL [pricing tier]
+      , B.loan_purpose_code_description  [CollateralCode]
+      ,NULL [Post_DTI]
+      ,NULL [Pre_DTI]
+      
+      ,NULL [LTV]
+      ,\'EXISTING\'
+      ,\'\' [Co_Borrower]
+      ,NULL [Unsecured_Debt_Ratio]
+      ,NULL [Collateral_Condition]
+      ,NULL [DealerCode]
+	  ,CONVERT(VARCHAR,B.loan_number)+\'_DMI\'  [Unique_ID]
+	     , CASE
+	WHEN investor_id = \'28R\' 
+	THEN 0.00
+	WHEN investor_id = \'28T\'
+	THEN 0.00
+	WHEN investor_id = \'28S\'
+	THEN CAST(B.original_mortgage_amount AS FLOAT) * 1
+	ELSE CAST(B.original_mortgage_amount AS FLOAT)
+	END [CreditLimit]
+    ,DATEADD(m,-1,B.next_payment_due_date) [Last Payment Date]  
+	 ,NULL [PTI]
+	 ,NULL [DEALERNAME] 
+	 ,NULL [Branch_Code] 
+	 ,NULL [VALUE]
+     ,NULL SELLER_CODE
+	  ,NULL [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+ 
+	  ,\'DMI\' [DATA SOURCE]
+	  , NULL [XP CO AMOUNT]
+	  ,NULL [NCINO CO AMOUNT]
+	  ,NULL [XP NET CO]
+  	  ,NULL [XP RECOVERY]
+	  ,NULL [External Card Data]
+	 
+	
+
+
+
+
+FROM #TEMPTABLE1 A
+JOIN [NCino Data Files].DBO.STAGING_DMI B ON CONVERT(FLOAT,A.ACCOUNT_NUMBER) = CONVERT(FLOAT,B.loan_number)  AND A.ASOFDATE = B.ASOFDATE
+WHERE B.first_principal_balance IS NOT NULL
+--SELECT * FROM #TEMPTABLE1
+
+DROP TABLE #TEMPTABLE1
+''' Timeout: 30 Result=> dmiloan
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS DMI FACT LOAN HISTORY
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate date
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+Delete FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'DMI\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+
+[AsofDate]
+      ,[LastActivityDate]
+      ,[DaysDelinquent]
+      ,[Current_Balance]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+      ,[LastActivityType]
+      ,[LastUpdatedScore]
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+      ,[New_Credit_Score]
+      ,[DATA SOURCE]
+	  )
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+,@processDate [LastActivityDate]
+, [DAYS DELINQUENT] DaysDelinquent
+,ISNULL(IIF(CONVERT(FLOAT,z.[coamount])>0.00,0.00,
+
+CASE
+	WHEN investor_id = \'28R\' 
+	THEN 0.00
+	WHEN investor_id = \'28T\'
+	THEN 0.00
+	WHEN investor_id = \'28S\'
+	THEN CAST(a.first_principal_balance AS FLOAT) * 1
+	ELSE CAST(a.first_principal_balance AS FLOAT)
+	END
+--CAST(a.first_principal_balance AS FLOAT)
+
+),0) AS CurrentBalance
+,ISNULL(
+
+ CASE
+	WHEN investor_id = \'28R\' 
+	THEN 0.00
+	WHEN investor_id = \'28T\'
+	THEN 0.00
+	WHEN investor_id = \'28S\'
+	THEN CAST(a.original_mortgage_amount AS FLOAT) * 1
+	ELSE CAST(a.original_mortgage_amount AS FLOAT)
+	END
+	--a.original_mortgage_amount 
+,0) AS CreditLimit
+,@processDate  [Last ActivityDate]
+,\'\' [LastActivityType]
+,NULL LastUpdatedScore
+,0 [NumberOfTimes30-59]
+,0 [NumberOfTimes60-89]
+,0 [NumberOfTimes90-119]
+,0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,NULL New_Credit_Score
+,\'DMI\' [DATA SOURCE]
+
+
+FROM [DW-LPA].DBO.Fact_Loan z
+
+
+
+LEFT JOIN (SELECT
+			                                         CONVERT(VARCHAR,A.loan_number)+\'_DMI\' UNIQUE_ID2
+													,A.*
+													FROM [NCino Data Files].dbo.STAGING_DMI A
+													
+													
+													WHERE A.ASOFDATE = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+WHERE z.[DATA SOURCE] = \'DMI\' ''' Timeout: 30 Result=> dmihistory
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS COMMERCIAL FACT LOAN
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #TEMPTABLE1
+SELECT
+ A.ACCOUNT_NUMBER, A.ASOFDATE
+ 
+ INTO #TEMPTABLE1 
+ 
+ FROM (
+
+SELECT [Loan Number] ACCOUNT_NUMBER, ASOFDATE, ROW_NUMBER() OVER (PARTITION BY [Loan Number] ORDER BY ASOFDATE DESC) AS ROWNUM FROM [NCino Data Files].dbo.staging_commercial ) A 
+WHERE A.ROWNUM = 1
+
+
+DELETE FROM [DW-LPA].DBO.FACT_LOAN WHERE [DATA SOURCE] = \'HEARTLAND\' AND Unique_ID IN 
+(SELECT CONVERT(VARCHAR,[AccountNumber])+\'_HEARTLAND\' FROM #TEMPTABLE1)
+INSERT INTO [DW-LPA].DBO.Fact_Loan
+
+SELECT DISTINCT
+
+\'L\' [RecordID]
+      , B.[Loan Number]  [AccountNumber]
+	 , CASE WHEN B.[Loan Type] = \'HOTEL\' THEN \'9999001\'
+	         WHEN B.[Loan Type] = \'RE 1-4 family\' THEN \'9999002\'
+			 WHEN B.[Loan Type] = \'RE Comm Owner Occ\' THEN \'9999003\'
+			 WHEN B.[Loan Type] = \'RE Draw Down Line of Credit\' THEN \'9999005\'
+			 WHEN B.[Loan Type] = \'RE Multi Family\' THEN \'9999006\'
+			 WHEN B.[Loan Type] = \'RE Revolver 1-4 family\' THEN \'9999007\'
+			 WHEN B.[Loan Type] = \'RE Commercial\' THEN \'9999009\'
+			 ELSE \'9999008\' END [LOAN TYPE]
+	 ----,CONVERT(MONEY,B.[Prin   P&I Pmt])* E.[PERCENT] [PaymentAmount] 
+	  ,CONVERT(money,REPLACE(REPLACE(REPLACE(B.[Prin   P&I Pmt],\'$\',\'\'),\',\',\'\'),\'-\',\'\'))* 1 [PaymentAmount] 
+  ,B.[Loan Type] [PurposeCode] 
+  ,IIF(c.forceterm IS NOT  NULL, c.forceterm, B.[Loan Term]) [LoanTerm]
+  ,\'30\' [PaymentFrequencyCode]
+  ,B.[Note Dt] [DateofLoan]
+  ----,CONVERT(MONEY,B.[Loan Amount])* E.[PERCENT] [OriginalLoanAmount]
+  ,CONVERT(MONEY,REPLACE(REPLACE(B.[Loan Amount],\'$\',\'\'),\',\',\'\'))* 1 [OriginalLoanAmount]
+  ,\'\'[InterestRateCode]
+  ,REPLACE(B.[Int Rate],\'%%\',\'\')/100.00 [RATE]
+  ,\'\' [LoanOfficer]
+  ,\'\' [OriginalCreditScore]
+  ,0.00 [COAmount]
+  , NULL  [CODate]
+  ,NULL [pricing tier]
+  , B.[Loan Type]  [CollateralCode]
+  ,NULL [Post_DTI]
+  ,NULL [Pre_DTI]
+  ,NULL [LTV]
+  ,\'EXISTING\'
+ 
+      ,\'\' [Co_Borrower]
+      ,NULL [Unsecured_Debt_Ratio]
+      ,NULL [Collateral_Condition]
+      ,NULL [DealerCode]
+	  ,CONVERT(VARCHAR,B.[Loan Number])+\'_HEARTLAND\'  [Unique_ID]
+	  , CONVERT(MONEY,REPLACE(REPLACE(B.[Loan Amount],\'$\',\'\'),\',\',\'\'))* 1 [CreditLimit]
+	  ,B.[Dt Last Activity] [Last Payment Date]
+  	  ,NULL [PTI]
+	  
+	  ,NULL [DEALERNAME]
+	  ,NULL [Branch_Code]
+	  ,NULL [VALUE]
+	  ,NULL SELLER_CODE
+	  ,NULL [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+	  ,\'HEARTLAND\' [DATA SOURCE]
+	  , NULL [XP CO AMOUNT]
+	  ,NULL [NCINO CO AMOUNT]
+	  ,NULL [XP NET CO]
+  	  ,NULL [XP RECOVERY]
+	  ,NULL [External Card Status]
+
+
+
+
+
+FROM #TEMPTABLE1 A
+JOIN [NCino Data Files].DBO.staging_commercial B ON A.ACCOUNT_NUMBER = B.[Loan Number]  AND A.ASOFDATE = B.ASOFDATE
+--LEFT JOIN ReferenceTables.DBO.DIM_HEARTLAND_PARTICIPATIONS E ON A.ACCOUNT_NUMBER = E.[LOAN NUMBER]
+LEFT JOIN [DW-LPA].dbo.Dim_LoanType c ON CASE WHEN B.[Loan Type] = \'HOTEL\' THEN \'9999001\'
+	         WHEN B.[Loan Type] = \'RE 1-4 family\' THEN \'9999002\'
+			 WHEN B.[Loan Type] = \'RE Comm Owner Occ\' THEN \'9999003\'
+			 WHEN B.[Loan Type] = \'RE Draw Down Line of Credit\' THEN \'9999005\'
+			 WHEN B.[Loan Type] = \'RE Multi Family\' THEN \'9999006\'
+			 WHEN B.[Loan Type] = \'RE Revolver 1-4 family\' THEN \'9999007\'
+			 WHEN B.[Loan Type] = \'RE Commercial\' THEN \'9999009\'
+			 ELSE \'9999008\' END = c.[Loan Type]
+--SELECT * FROM #TEMPTABLE1
+
+
+
+DROP TABLE #TEMPTABLE1
+''' Timeout: 30 Result=> HeartlandLoan
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS COMMERCIAL FACT LOAN HISTORY
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate date
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+Delete FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'HEARTLAND\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+		[AsofDate]
+      ,[LastActivityDate]
+      ,[CreditLimit]
+      ,[Current_Balance]
+      ,[DaysDelinquent]
+      ,[Last_Payment_Date]
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+	  ,[DATA SOURCE]
+
+)
+
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+
+,IIF(z.Last_Payment_Date IS NULL,A.[Dt Last Activity],z.Last_Payment_Date) [LastActivityDate]
+--,ISNULL(CONVERT(MONEY,a.[Total Disb Amt]),0) * ISNULL([E].[PERCENT],1) AS CreditLimit
+,ISNULL(CONVERT(MONEY,a.[Total Disb Amt]),0) * 1 AS CreditLimit
+--,CONVERT(MONEY,[LOAN AMOUNT]) * ISNULL([E].[PERCENT],1) AS CurrentBalance
+,isnull(CONVERT(MONEY,[LOAN AMOUNT]),0) * 1 AS CurrentBalance
+, [Days Delinquent] DaysDelinquent
+,IIF(z.Last_Payment_Date IS NULL,A.[Dt Last Activity],z.Last_Payment_Date)  [Last ActivityDate]
+,[30 Days] [NumberOfTimes30-59]
+,[60 Days] [NumberOfTimes60-89]
+,[90 Days+] [NumberOfTimes90-119]
+,0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,\'HEARTLAND\' [DATA SOURCE]
+
+FROM [DW-LPA].DBO.Fact_Loan z
+--LEFT JOIN ReferenceTables.DBO.DIM_HEARTLAND_PARTICIPATIONS E ON Z.AccountNumber = E.[LOAN NUMBER]
+
+
+LEFT JOIN (SELECT
+			                                         CONVERT(VARCHAR,[A].[Loan Number])+\'_HEARTLAND\' UNIQUE_ID2
+													,A.*
+													FROM [NCino Data Files].dbo.staging_commercial A
+													
+													
+													WHERE A.ASOFDATE = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+WHERE z.[DATA SOURCE] = \'HEARTLAND\'''' Timeout: 30 Result=> HeartlandHistory
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS XP2 FACT LOAN
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @Processdate DATE = \'%Year%-%Month%-%Day%\'
+
+
+DROP TABLE IF EXISTS #temptable2
+CREATE TABLE #temptable2 ( MemberNumber INT, LoanNumber INT, FICO int)
+
+INSERT INTO #temptable2 (MemberNumber, LoanNumber, fico)
+SELECT MEMBER_NBR,
+      LOAN_NBR,
+	  MAX(LOAN_PROPERTY_VALUE)
+FROM XP2_MonthEnd_ODS.db2inst1.LOANPROPERTY WHERE ITEM_NAME = \'OXORIGINAL_SCORE\'
+GROUP BY MEMBER_NBR, LOAN_NBR;
+
+
+DROP TABLE IF EXISTS #temptable1
+CREATE TABLE #temptable1 ( MemberNumber INT, LoanNumber INT, RISK_RATING VARCHAR(10))
+
+INSERT INTO #temptable1 (MemberNumber, LoanNumber, RISK_RATING)
+SELECT MEMBER_NBR,
+      LOAN_NBR,
+	  MAX(LOAN_PROPERTY_VALUE)
+FROM XP2_MonthEnd_ODS.db2inst1.LOANPROPERTY WHERE ITEM_NAME = \'OXRISK_RATING\'
+GROUP BY MEMBER_NBR, LOAN_NBR;
+
+DROP TABLE IF EXISTS #temptable3
+
+SELECT * INTO #temptable3 FROM (
+
+SELECT
+	*
+	,  ROW_NUMBER() OVER (
+							PARTITION BY 
+								[MEMBER NUMBER]
+								, [LOAN NUMBER]
+								, [LOAN TYPE]
+								,[ORIG TERM]
+								,[CO DATE]
+								,[CO BALANCE]
+								, CASE WHEN ISDATE([OPEN DATE]) = 1
+										THEN [OPEN DATE] 
+										ELSE NULL
+										END  
+							ORDER BY CONVERT(VARCHAR,CAST(AS_OF_DATE AS DATE),101) DESC) AS ROWNUM
+FROM dw1.dbo.view_Loan_Dashboards WHERE AS_OF_DATE = @Processdate
+
+
+)a WHERE a.ROWNUM = 1
+
+DROP TABLE IF EXISTS #temptable10
+
+SELECT * INTO #temptable10 FROM (
+SELECT *, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, LOAN_NBR, OPEN_DATE ORDER BY XPTIMESTAMP DESC) rownum
+FROM XP2_MonthEnd_ODS.DB2INST1.loan
+WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @processDate
+)a WHERE a.rownum = 1
+
+DROP TABLE IF EXISTS #TEMPTABLE6
+SELECT * INTO #TEMPTABLE6
+FROM 
+(
+SELECT A.[MEMBER NUMBER], A.[OPEN DATE]  FROM (
+SELECT a.[MEMBER NUMBER], A.TIN, A.AS_OF_DATE, a.[OPEN DATE], ROW_NUMBER() OVER (PARTITION BY a.[MEMBER NUMBER] ORDER BY a.AS_OF_DATE DESC) ROWNUM  
+
+FROM dw1.DBO.View_MemberDashboard a
+WHERE a.AS_OF_DATE = @processdate
+) A 
+
+
+WHERE ROWNUM = 1) A;
+
+DROP TABLE IF EXISTS #temptable15
+
+SELECT * INTO #temptable15 FROM (
+SELECT *, ROW_NUMBER() OVER (PARTITION BY B.MEMBER_NBR, B.LOAN_NBR, B.OPEN_DATE ORDER by ASOFDATE DESC) rownum FROM 
+[NCino Data Files].dbo.STAGING_XP B WHERE B.ASOFDATE = @Processdate
+		
+
+
+)a WHERE rownum = 1
+
+
+DELETE FROM [DW-LPA].dbo.Fact_Loan WHERE [Data Source] = \'XP2\' AND unique_ID IN 
+
+(SELECT Convert(VARCHAR,e.[MEMBER NUMBER])+CONVERT(VARCHAR,e.[LOAN NUMBER])+ CONVERT( VARCHAR, CAST(e.[OPEN DATE] AS DATE)) +CONVERT(VARCHAR,ISNULL(e.[LOAN TYPE],\'\'))  [Unique_ID]
+
+FROM 
+#temptable3 e  )
+
+INSERT INTO [DW-LPA].dbo.Fact_Loan
+
+SELECT 
+		\'L\' [RecordID]
+      , CONVERT(VARCHAR,a.[MEMBER NUMBER])+ \'_\' + CONVERT(VARCHAR,a.[LOAN NUMBER]) [AccountNumber]
+	  
+	  ,a.[LOAN TYPE] [Loan Type]
+   ,IIF(ISNUMERIC(CONVERT(DECIMAL,e.SCHEDULED_PMT))=1,CONVERT(DECIMAL,e.SCHEDULED_PMT),0.00) [PaymentAmount]
+      ,a.[LOAN TYPE] [PurposeCode] 
+      ,ISNULL(IIF(a.[ORIGINAL TERM] = 0, 48, a.[ORIGINAL TERM]),48)  [LOAN TERM]
+      ,ISNULL(Cast(E.FREQ as bigint),30) [PaymentFrequencyCode]
+      ,CAST(a.[OPEN DATE] AS DATE) [DateofLoan]
+      ,e.ORIG_AMT [OriginalLoanAmount]
+      ,\'\'[InterestRateCode]
+	  ,e.RATE/100.00 [RATE]
+      
+      
+      ,e.OFFICER [LoanOfficer]
+	  ,CAST(E.CREDIT_SCORE AS BIGINT) [Credit Score]
+      ,CASE WHEN CAST(e.WOFF_AMOUNT AS FLOAT) > 0.00 then CAST(e.BALANCE AS FLOAT) ELSE 0.00 END [COAMOUNT]
+      ,CASE WHEN ISDATE(a.[CO DATE])=0 THEN NULL ELSE CAST(a.[CO DATE] AS DATE) END [CODate]
+	  ,H.RISK_RATING [pricing tier]
+      , COALESCE(a.[LOAN TYPE], c.[Loan Type])  [CollateralCode]
+     ,CAST(G.DBTRATIO AS INT) [Post_DTI]
+      ,CAST(G.DBTRATIO AS INT) [Pre_DTI]
+      
+      ,CAST(E.ORIGINAL_LTV AS INT) [LTV]
+	  
+      ,IIF(Q.[OPEN DATE] IS NULL,\'EXISTING\',IIF(DATEDIFF(dd,Q.[OPEN DATE],a.[OPEN DATE])<30,\'NEW\',\'EXISTING\'))
+      ,IIF(E.HAS_COBORROWERS = -1,1,0) [Co_Borrower]
+      ,CAST(G.UNSEC_DEBT_RATIO_BFR AS INT) [Unsecured_Debt_Ratio]
+      ,C.Condition [Collateral_Condition]
+      ,IIF(LEN(E.CLASSIFICATION_CODE)=0,NULL,IIF(C.Channel=\'INDIRECT\',E.CLASSIFICATION_CODE,NULL)) [DealerCode]
+	  ,Convert(VARCHAR,a.[MEMBER NUMBER])+CONVERT(VARCHAR,a.[LOAN NUMBER])+ CONVERT( VARCHAR, CAST(a.[OPEN DATE] AS DATE)) +CONVERT(VARCHAR,ISNULL(a.[LOAN TYPE],\'\'))  [Unique_ID]
+	  --,Convert(VARCHAR,e.MEMBER_NBR)+CONVERT(VARCHAR,e.LOAN_NBR)+ CONVERT( VARCHAR, CAST(e.OPEN_DATE AS DATE)) +CONVERT(VARCHAR,ISNULL(e.LOAN_TYPE,\'\'))  [Unique_ID]
+      ,e.LIMIT [CreditLimit]
+	 ,E.LAST_PAYMENT_DATE
+	  ,CAST(IIF(LEN(TOTMGIN)=0 OR TOTMGIN IS NULL OR TOTMGIN = 0,NULL,e.SCHEDULED_PMT/G.TOTMGIN*100) AS INT) [PTI]
+	 
+	  ,IIF(LEN(E.CLASSIFICATION_CODE)=0,NULL,IIF(C.Channel=\'INDIRECT\',E.CLASSIFICATION_CODE,NULL)) [DEALERNAME]
+	  ,COALESCE(a.[MEMBER BRANCH], e.BRANCH_NBR) [Branch_Code]
+	    ,0.00 [VALUE]
+	  ,IIF(LEN(E.CLASSIFICATION_CODE)=0,NULL,IIF(C.Channel=\'INDIRECT\',E.CLASSIFICATION_CODE,NULL)) SELLER_CODE
+	  ,IIF(LEN(E.CLASSIFICATION_CODE)=0,NULL,IIF(C.Channel=\'INDIRECT\',E.CLASSIFICATION_CODE,NULL)) [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+   
+	  ,\'XP2\' [DATA SOURCE]
+	  , e.WOFF_AMOUNT [XP CO AMOUNT]
+	  ,O.[WOFF_AMOUNT] [NCINO CO AMOUNT]
+	  ,IIF(e.WOFF_DATE IS NOT NULL, CONVERT(FLOAT,a.BALANCE),0.00) [XP NET CO]
+  	  ,e.WOFF_TOT_RECOV_AMT [XP RECOVERY]
+	  ,NULL [External Card Status]
+
+	  
+	   
+
+	  
+	  
+      
+
+
+
+
+
+FROM #temptable3 a
+--JOIN #temptable15 B 
+--		ON A.[MEMBER NUMBER] = B.MEMBER_NBR 
+--		AND A.[LOAN NUMBER] = B.LOAN_NBR 
+--		AND A.[LOAN TYPE] = B.LOAN_TYPE 	
+--		AND a.[OPEN DATE] = b.OPEN_DATE
+--		AND CONVERT(VARCHAR,CAST(A.AS_OF_DATE AS DATE),101) = CONVERT(VARCHAR,CAST(B.ASOFDATE AS DATE),101)
+ LEFT JOIN [DW-LPA].dbo.Dim_LoanType c on c.[Loan Type] = IIF(CONVERT(VARCHAR,A.[LOAN TYPE]) = \'21\', COALESCE(CONVERT(VARCHAR,A.[LOAN TYPE]),CONVERT(VARCHAR,A.[LOAN TYPE]),A.[LOAN TYPE]), CONVERT(VARCHAR,A.[LOAN TYPE]))
+ LEFT JOIN #temptable10 e ON a.[MEMBER NUMBER] = e.MEMBER_NBR AND a.[LOAN NUMBER] = e.LOAN_NBR AND a.[OPEN DATE] = e.OPEN_DATE
+ LEFT JOIN #temptable1 h ON a.[MEMBER NUMBER] = h.MemberNumber AND a.[LOAN NUMBER] = h.LoanNumber
+ LEFT JOIN (SELECT APLNUM, MAX(TOTMGIN )TOTMGIN, MAX(UNSEC_DEBT_RATIO_BFR) UNSEC_DEBT_RATIO_BFR, MAX(DBTRATIO) DBTRATIO FROM XP2_MonthEnd_ODS.db2inst1.APPLICATION GROUP BY APLNUM) G ON CONVERT(VARCHAR,E.LOAN_NOTE_NBR) = CONVERT(VARCHAR,G.APLNUM)
+ left join [NCino Data Files].dbo.staging_XP o ON a.[MEMBER NUMBER] = o.MEMBER_NBR AND a.[LOAN NUMBER] = o.LOAN_NBR AND a.[OPEN DATE] = o.OPEN_DATE AND a.AS_OF_DATE = o.ASOFDATE
+ left JOIN #TEMPTABLE6 q ON a.[MEMBER NUMBER] = q.[MEMBER NUMBER]''' Timeout: 180 Result=> XPLoan
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS XP2 FACT LOAN HISTORY
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate DATE
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+
+DROP TABLE IF EXISTS #temptable10
+SELECT * INTO #temptable10 FROM (
+SELECT *, ROW_NUMBER() OVER (PARTITION BY MEMBER_NBR, LOAN_NBR, OPEN_DATE ORDER BY XPTIMESTAMP DESC) rownum
+FROM XP2_MonthEnd_ODS.DB2INST1.loan
+WHERE DATEADD(HOUR,-6,XPTIMESTAMP) <= @processDate
+)a WHERE a.rownum = 1
+
+
+DELETE FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'XP2\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+	[AsofDate]
+      ,[LastActivityDate]
+      ,[DaysDelinquent]
+      ,[Current_Balance]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+      ,[LastActivityType]
+      ,[LastUpdatedScore]
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+      ,[New_Credit_Score]
+      ,[DATA SOURCE]
+
+)
+
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+, CASE WHEN ISDATE(CONVERT(VARCHAR,z.Last_Payment_Date)) = 1 THEN z.Last_Payment_Date ELSE NULL END [LastActivityDate]
+, m.[DAYS DELINQUENT]
+,ISNULL(IIF(LEN(z.CODate)>0,0.00,a.balance),0.00)  CurrentBalance
+,ISNULL(IIF(ISNUMERIC(a.[Limit])=1,CONVERT(FLOAT,a.[Limit]),NULL),0) AS CreditLimit
+,CASE WHEN ISDATE(CONVERT(VARCHAR,z.Last_Payment_Date)) = 1 THEN z.Last_Payment_Date ELSE NULL END Last_Payment_Date
+,null
+,NULL LastUpdatedCreditScore
+, A.[EVER 30] [NumberOfTimes30-59]
+, A.[EVER 60] [NumberOfTimes60-89]
+, A.[EVER 90] [NumberOfTimes90-119]
+, 0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,NULL New_Credit_Score
+,\'XP2\' [DATA SOURCE]
+
+FROM [DW-LPA].DBO.Fact_Loan z
+
+
+
+LEFT JOIN (
+			SELECT Convert(VARCHAR,a.[MEMBER NUMBER])+CONVERT(VARCHAR,a.[LOAN NUMBER])+ CONVERT( VARCHAR, CAST(a.[OPEN DATE] AS DATE)) +CONVERT(VARCHAR,ISNULL(a.[LOAN TYPE],\'\')) UNIQUE_ID2
+													,a.*
+													FROM dw1.dbo.view_Loan_Dashboards a
+													
+													
+													WHERE A.As_of_Date = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+
+LEFT JOIN dw1.dbo.view_DelinquencyReport M ON CONVERT(VARCHAR,A.[Member Number]) = CONVERT(VARCHAR,M.[Member Number]) AND CONVERT(VARCHAR,A.[Loan Number]) = CONVERT(VARCHAR,M.[Loan Number]) AND A.As_of_Date = M.ASOFDATE
+
+LEFT JOIN #temptable10 E ON CONVERT(VARCHAR,A.[MEMBER NUMBER]) = CONVERT(VARCHAR,E.MEMBER_NBR) AND CONVERT(VARCHAR,A.[Loan Number]) = CONVERT(VARCHAR,E.LOAN_NBR) 
+WHERE z.[DATA SOURCE] = \'XP2\'''' Timeout: 30 Result=> XPLoanHistory
+Database.Close Connection: SQLConnection
+# PROCESS XP2-PURGED FACT LOAN
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temptable2
+CREATE TABLE #temptable2 ( MemberNumber INT, LoanNumber INT, FICO int)
+
+INSERT INTO #temptable2 (MemberNumber, LoanNumber, fico)
+SELECT MEMBER_NBR,
+      LOAN_NBR,
+	  MAX(LOAN_PROPERTY_VALUE)
+FROM Daily_Staging_Tables.staging.LOANPROPERTY WHERE ITEM_NAME = \'OXORIGINAL_SCORE\'
+GROUP BY MEMBER_NBR, LOAN_NBR;
+
+DROP TABLE IF EXISTS #temptable1
+CREATE TABLE #temptable1 ( MemberNumber INT, LoanNumber INT, RISK_RATING VARCHAR(10))
+
+INSERT INTO #temptable1 (MemberNumber, LoanNumber, RISK_RATING)
+SELECT MEMBER_NBR,
+      LOAN_NBR,
+	  MAX(LOAN_PROPERTY_VALUE)
+FROM Daily_Staging_Tables.staging.LOANPROPERTY WHERE ITEM_NAME = \'OXRISK_RATING\'
+GROUP BY MEMBER_NBR, LOAN_NBR;
+
+DROP TABLE IF EXISTS #TEMPTABLE3
+SELECT * INTO #TEMPTABLE3
+FROM (
+SELECT DISTINCT * FROM 
+(
+SELECT 
+	MEMBER_NBR
+	, LOAN_NBR
+	, LOAN_TYPE
+	, CONVERT(VARCHAR,CAST(ASOFDATE AS DATE),101) [ASOFDATE]
+	,CASE WHEN ISDATE(OPEN_DATE) = 1
+	 THEN EOMONTH(OPEN_DATE,0) 
+	 ELSE \'1/1/1900\'
+	 END OPEN_PERIOD
+	,  ROW_NUMBER() OVER (
+							PARTITION BY 
+								MEMBER_NBR
+								, LOAN_NBR
+								, LOAN_TYPE
+								, CASE WHEN ISDATE(OPEN_DATE) = 1
+										THEN EOMONTH(OPEN_DATE,0) 
+										ELSE NULL
+										END  
+							ORDER BY CONVERT(VARCHAR,CAST(ASOFDATE AS DATE),101) DESC) AS ROWNUM
+
+
+
+FROM [NCino Data Files].dbo.STAGING_XP
+) A
+
+WHERE A.ROWNUM = 1
+) A;
+
+
+DROP TABLE IF EXISTS #TEMPTABLE4
+SELECT * INTO #TEMPTABLE4
+FROM (
+SELECT DISTINCT * FROM 
+(
+SELECT 
+	MEMBER_NBR
+	, LOAN_NBR
+	, LOAN_TYPE
+	, CONVERT(VARCHAR,CAST(ASOFDATE AS DATE),101) [ASOFDATE]
+	,CASE WHEN ISDATE(OPEN_DATE) = 1
+	 THEN EOMONTH(OPEN_DATE,0) 
+	 ELSE NULL
+	 END OPEN_PERIOD
+	,  ROW_NUMBER() OVER (
+							PARTITION BY 
+								MEMBER_NBR
+								, LOAN_NBR
+								, LOAN_TYPE
+								, CASE WHEN ISDATE(OPEN_DATE) = 1
+										THEN EOMONTH(OPEN_DATE,0) 
+										ELSE NULL
+										END  
+							ORDER BY CONVERT(VARCHAR,CAST(ASOFDATE AS DATE),101) ASC) AS ROWNUM
+
+
+FROM [NCino Data Files].dbo.STAGING_XP
+) A
+
+WHERE A.ROWNUM = 1
+) A;
+
+DROP TABLE IF EXISTS #TEMPTABLE7
+SELECT A.[MEMBER NUMBER], BRANCH INTO #TEMPTABLE7 FROM (
+SELECT [MEMBER NUMBER], BRANCH, ROW_NUMBER() OVER (PARTITION BY [MEMBER NUMBER] ORDER BY AS_OF_DATE DESC) AS ROWNUM
+FROM TempReports.DBO.[MEMBER REPORT] ) A WHERE A.ROWNUM = 1;
+
+DROP TABLE IF EXISTS #TEMPTABLE6
+SELECT * INTO #TEMPTABLE6
+FROM 
+(
+SELECT A.[MEMBER NUMBER], B.Open_Date FROM (
+SELECT a.[MEMBER NUMBER], A.TIN, A.AS_OF_DATE, ROW_NUMBER() OVER (PARTITION BY a.[MEMBER NUMBER] ORDER BY a.AS_OF_DATE DESC) ROWNUM  
+
+FROM TempReports.dbo.[MEMBER REPORT] a ) A 
+JOIN TEMPREPORTS.DBO.FACT_TIN_OPENDATE B ON A.TIN = B.TIN AND  A.AS_OF_DATE = B.As_of_date
+
+WHERE ROWNUM = 1) A;
+
+DELETE FROM [DW-LPA].DBO.Fact_Loan WHERE [DATA SOURCE] = \'XP2-PURGED\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan 
+SELECT DISTINCT
+
+		\'L\' [RecordID]
+      , CONVERT(VARCHAR,a.MEMBER_NBR)+ \'_\' + CONVERT(VARCHAR,a.[LOAN_NBR]) [AccountNumber]
+	  
+	  ,IIF(CONVERT(VARCHAR,b.[LOAN_TYPE]) = \'21\', COALESCE(CONVERT(VARCHAR,M.[LOAN_TYPE]),CONVERT(VARCHAR,N.LOAN_TYPE),B.LOAN_TYPE), CONVERT(VARCHAR,B.[LOAN_TYPE])) [Loan Type]
+   ,IIF(ISNUMERIC(CONVERT(DECIMAL,B.SCHEDULED_PMT))=1,CONVERT(DECIMAL,B.SCHEDULED_PMT),0.00) [PaymentAmount]
+      ,a.[LOAN_TYPE] [PurposeCode] 
+      ,IIF(c.ForceTerm IS NOT NULL, c.ForceTerm, ISNULL(B.ORIG_TERM,48))  [LoanTerm]
+      ,ISNULL(E.FREQ,30) [PaymentFrequencyCode]
+      ,CASE WHEN ISDATE(B.[OPEN_DATE])= 1 THEN B.OPEN_DATE ELSE NULL END [DateofLoan]
+      ,B.ORIG_AMT [OriginalLoanAmount]
+      ,B.RATE/100.00 [RATE]
+      ,\'\'[InterestRateCode]
+      ,B.LIMIT [CreditLimit]
+      ,B.OFFICER [LoanOfficer]
+      ,COALESCE(IIF(B.ORIG_FICO=\'NULL\' OR B.ORIG_FICO < 250,NULL,B.ORIG_FICO),F.FICO,E.ORIGINAL_CREDIT_SCORE,E.CREDIT_SCORE) [OriginalCreditScore]
+   ,IIF(O.[CHARGE OFF DATE] IS NOT NULL,IIF(B.BALANCE>O.[CHARGE OFF BALANCE],O.[CHARGE OFF BALANCE],B.BALANCE),0.00) [COAmount]
+      ,CONVERT(VARCHAR,CAST(O.[CHARGE OFF DATE] AS DATE),101)   [CODate]
+	  ,H.RISK_RATING [pricing tier]
+      , B.[LOAN_TYPE]  [CollateralCode]
+      ,COALESCE(P.BRANCH,B.BRANCH) [Branch_Code]
+      ,CAST(G.DBTRATIO AS INT) [Pre_DTI]
+      ,CAST(G.DBTRATIO AS INT) [Post_DTI]
+      ,CAST(E.ORIGINAL_LTV AS INT) [LTV]
+      ,IIF(Q.OPEN_DATE IS NULL,\'EXISTING\',IIF(DATEDIFF(dd,EOMONTH(Q.Open_Date),A.OPEN_PERIOD)<30,\'NEW\',\'EXISTING\'))
+      ,IIF(E.HAS_COBORROWERS = -1,1,0) [Co_Borrower]
+      ,CAST(G.UNSEC_DEBT_RATIO_BFR AS INT) [Unsecured_Debt_Ratio]
+      ,C.Condition [Collateral_Condition]
+      ,IIF(LEN(E.CLASSIFICATION_CODE)=0,NULL,IIF(C.Channel=\'INDIRECT\',E.CLASSIFICATION_CODE,NULL)) [DealerCode]
+      ,0.00 [VALUE]
+	  ,CAST(IIF(LEN(TOTMGIN)=0 OR TOTMGIN IS NULL OR TOTMGIN = 0,NULL,B.SCHEDULED_PMT/G.TOTMGIN*100) AS INT) [PTI]
+	  ,c.[Channel]
+	  ,IIF(LEN(E.CLASSIFICATION_CODE)=0,NULL,IIF(C.Channel=\'INDIRECT\',E.CLASSIFICATION_CODE,NULL)) [DEALERNAME]
+	  ,IIF(LEN(E.CLASSIFICATION_CODE)=0,NULL,IIF(C.Channel=\'INDIRECT\',E.CLASSIFICATION_CODE,NULL)) SELLER_CODE
+	  ,IIF(LEN(E.CLASSIFICATION_CODE)=0,NULL,IIF(C.Channel=\'INDIRECT\',E.CLASSIFICATION_CODE,NULL)) [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+      ,Convert(VARCHAR,B.MEMBER_NBR)+CONVERT(VARCHAR,B.LOAN_NBR)+(CASE WHEN ISDATE(B.[OPEN_DATE]) = 1 THEN B.OPEN_DATE ELSE \'\' END)+ISNULL(B.LOAN_TYPE,\'\')  [Unique_ID]
+      ,c.[Category]
+	  ,E.LAST_PAYMENT_DATE
+	  ,\'XP2-PURGED\' [DATA SOURCE]
+	  , Y.WOFF_AMOUNT [XP CO AMOUNT]
+	  ,O.[Charge off Balance] [NCINO CO AMOUNT]
+	  ,IIF(COALESCE(Y.WOFF_DATE,o.[CHARGE OFF DATE]) IS NOT NULL, CONVERT(FLOAT,Y.BALANCE),0.00) [XP NET CO]
+  	  ,Y.WOFF_TOT_RECOV_AMT [XP RECOVERY]
+	  ,NULL [External Card Status]
+	  
+
+	  
+	  
+      
+
+ FROM #TEMPTABLE3 A
+ JOIN [NCino Data Files].dbo.STAGING_XP B 
+		ON A.MEMBER_NBR = B.MEMBER_NBR 
+		AND A.LOAN_NBR = B.LOAN_NBR 
+		AND A.LOAN_TYPE = B.LOAN_TYPE 		
+		AND CONVERT(VARCHAR,CAST(A.ASOFDATE AS DATE),101) = CONVERT(VARCHAR,CAST(B.ASOFDATE AS DATE),101)
+
+ LEFT JOIN 
+ (
+ SELECT A.MEMBER_NBR, A.LOAN_NBR, A.BALANCE, A.WOFF_AMOUNT,A.WOFF_DATE, A.WOFF_TOT_RECOV_AMT FROM (
+ SELECT MEMBER_NBR, LOAN_NBR, BALANCE, WOFF_AMOUNT, WOFF_TOT_RECOV_AMT, WOFF_DATE, ROW_NUMBER() OVER(PARTITION BY MEMBER_NBR, LOAN_NBR ORDER BY XPTIMESTAMP DESC) AS ROWNUM FROM 
+ Daily_Staging_Tables.STAGING.LOAN) A WHERE A.ROWNUM = 1
+ 
+ )
+ 
+ Y ON B.MEMBER_NBR = Y.MEMBER_NBR AND B.LOAN_NBR = Y.LOAN_NBR 
+
+ LEFT JOIN TempReports.DBO.FACT_LOAN_HISTORY_TIMESTAMP D ON CONVERT(VARCHAR,CAST(A.ASOFDATE AS DATE),101) = CONVERT(VARCHAR,CAST(D.As_of_Date AS DATE),101) AND A.MEMBER_NBR = D.[MEMBER NUMBER] AND A.LOAN_NBR = D.LOAN_NBR
+ LEFT JOIN Daily_Staging_Tables.STAGING.LOAN E ON D.[MEMBER NUMBER] = E.MEMBER_NBR AND D.LOAN_NBR = E.LOAN_NBR AND D.XPTIMESTAMP = E.XPTIMESTAMP
+ LEFT JOIN #temptable2 F ON A.[MEMBER_NBR] = F.MemberNumber AND CONVERT(VARCHAR,A.LOAN_NBR) = CONVERT(VARCHAR,F.LoanNumber)
+ LEFT JOIN (SELECT APLNUM, MAX(TOTMGIN )TOTMGIN, MAX(UNSEC_DEBT_RATIO_BFR) UNSEC_DEBT_RATIO_BFR, MAX(DBTRATIO) DBTRATIO FROM Daily_Staging_Tables.STAGING.APPLICATION GROUP BY APLNUM) G ON CONVERT(VARCHAR,E.LOAN_NOTE_NBR) = CONVERT(VARCHAR,G.APLNUM)
+ LEFT JOIN #temptable1 H ON CONVERT(VARCHAR,A.[MEMBER_NBR]) = CONVERT(VARCHAR,H.MemberNumber) AND CONVERT(VARCHAR,A.[LOAN_NBR]) = CONVERT(VARCHAR,H.LoanNumber)
+ LEFT JOIN ReferenceTables.DBO.DIM_LOAN_ORIGINATION_DATA M ON CONVERT(VARCHAR,A.MEMBER_NBR) = CONVERT(VARCHAR,M.[MEMBER_NBR]) AND CONVERT(VARCHAR,A.[LOAN_NBR]) = CONVERT(VARCHAR,M.LOAN_NBR) AND CONVERT(VARCHAR,A.OPEN_PERIOD,101) = EOMONTH(M.OPEN_DATE,0)
+ LEFT JOIN ReferenceTables.DBO.DIM_LOAN_ORIGINATION_DATA N ON CONVERT(VARCHAR,A.MEMBER_NBR) = CONVERT(VARCHAR,N.[MEMBER_NBR]) AND CONVERT(VARCHAR,A.[LOAN_NBR]) = CONVERT(VARCHAR,N.LOAN_NBR) AND CONVERT(VARCHAR,A.OPEN_PERIOD,101) = EOMONTH(N.OPEN_DATE,0)
+ LEFT JOIN ReferenceTables.dbo.Dim_LoanType c on c.[Loan Type] = IIF(CONVERT(VARCHAR,b.[LOAN_TYPE]) = \'21\', COALESCE(CONVERT(VARCHAR,M.[LOAN_TYPE]),CONVERT(VARCHAR,N.LOAN_TYPE),B.LOAN_TYPE), CONVERT(VARCHAR,B.[LOAN_TYPE]))
+ LEFT JOIN (SELECT [Member Number],[Loan Number],[Loan CODE],[Loan Origination Date],MAX([Charge off Balance]) [CHARGE OFF BALANCE], MAX(IIF([Charge off date]=\'1/1/1900\',NULL,[Charge off date])) [CHARGE OFF DATE]  FROM Staging_CO.dbo.staging_co GROUP BY [Member Number], [Loan Number], [Loan Code], [Loan Origination Date]) O ON B.MEMBER_NBR = O.[Member Number] AND B.LOAN_NBR = O.[Loan Number] AND A.OPEN_PERIOD = EOMONTH(O.[Loan Origination Date],0) AND IIF(CONVERT(VARCHAR,b.[LOAN_TYPE]) = \'21\', COALESCE(CONVERT(VARCHAR,M.[LOAN_TYPE]),CONVERT(VARCHAR,N.LOAN_TYPE),B.LOAN_TYPE), CONVERT(VARCHAR,B.[LOAN_TYPE])) = O.[Loan Code]
+ LEFT JOIN #TEMPTABLE7 P ON A.MEMBER_NBR = P.[MEMBER NUMBER] 
+ LEFT JOIN #TEMPTABLE6 Q ON A.MEMBER_NBR = Q.[MEMBER NUMBER]
+ JOIN (SELECT *, ROW_NUMBER() OVER (PARTITION BY Member_Nbr, Loan_Nbr ORDER BY Open_Date DESC) rownum FROM 
+ 
+        [DW-LPA].dbo.DIM_XP2_Purged_Loans) pl ON a.MEMBER_NBR = pl.MEMBER_NBR AND a.LOAN_NBR = pl.LOAN_NBR AND b.OPEN_DATE = pl.OPEN_DATE  AND 1 = pl.rownum
+
+WHERE b.LOAN_TYPE <> \'21\'
+DROP TABLE #temptable2
+DROP TABLE #temptable1
+DROP TABLE #TEMPTABLE3
+DROP TABLE #TEMPTABLE4
+DROP TABLE #TEMPTABLE6
+DROP TABLE #TEMPTABLE7''' Timeout: 180 Result=> XPLoanPurged
+# PROCESS XP2-PURGED FACT LOAN HISTORY
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate date
+SET @ProcessDate = EOMONTH(GETDATE(),-1)
+
+DELETE FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'XP2-PURGED\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+		[AsofDate]
+      ,[LastActivityDate]
+      ,[CreditLimit]
+      ,[Current_Balance]
+      ,[DaysDelinquent]
+      ,[Last_Payment_Date]
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+	  ,[DATA SOURCE]
+
+)
+
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+,IIF(z.Last_Payment_Date IS NULL,E.LAST_PAYMENT_DATE,z.Last_Payment_Date) [LastActivityDate]
+,ISNULL(IIF(ISNUMERIC(a.[Limit])=1,CONVERT(FLOAT,a.[Limit]),NULL),0) AS CreditLimit
+--,a.balance
+,ISNULL(IIF(CONVERT(FLOAT,z.[coamount])>0.00,0.00,CONVERT(money,Replace(a.[Balance],\'$\',\'\'))),0) AS CurrentBalance
+,M.[Days Delinquent] DaysDelinquent
+,IIF(z.Last_Payment_Date IS NULL,E.LAST_PAYMENT_DATE,z.[Last_Payment_Date])  [Last ActivityDate]
+, A.TIMES_DELQ_30_DAYS [NumberOfTimes30-59]
+, A.TIMES_DELQ_60_DAYS [NumberOfTimes60-89]
+, A.TIMES_DELQ_90_DAYS [NumberOfTimes90-119]
+, 0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,\'XP2-PURGED\' [DATA SOURCE]
+
+FROM [DW-LPA].DBO.Fact_Loan z
+
+
+
+LEFT JOIN (
+			SELECT CONVERT(VARCHAR,A.[MEMBER_NBR])+CONVERT(VARCHAR,A.[LOAN_NBR])+(CASE WHEN ISDATE(A.[OPEN_DATE]) = 1 THEN A.[OPEN_DATE] ELSE \'\' END)+ISNULL(A.[LOAN_TYPE],\'\') UNIQUE_ID2
+													,A.*
+													FROM [NCino Data Files].dbo.STAGING_XP A
+													
+													
+													WHERE A.ASOFDATE = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+LEFT JOIN TempReports.DBO.FACT_LOAN_HISTORY Y ON A.[MEMBER_NBR] = Y.[MEMBER NUMBER] AND A.[LOAN_NBR] = Y.[LOAN NUMBER] AND @ProcessDate = Y.As_of_Date
+LEFT JOIN TempReports.dbo.[Delinquency Report] M ON CONVERT(VARCHAR,A.[MEMBER_NBR]) = CONVERT(VARCHAR,M.[Member Number]) AND CONVERT(VARCHAR,A.[LOAN_NBR]) = CONVERT(VARCHAR,M.[Loan Number]) AND A.ASOFDATE = M.As_of_Date
+
+LEFT JOIN TempReports.DBO.FACT_LOAN_HISTORY_TIMESTAMP D ON A.ASOFDATE = D.As_of_Date AND CONVERT(VARCHAR,A.[MEMBER_NBR]) = CONVERT(VARCHAR,D.[MEMBER NUMBER]) AND CONVERT(VARCHAR,A.[LOAN_NBR]) = CONVERT(VARCHAR,D.LOAN_NBR)
+LEFT JOIN Daily_Staging_Tables.STAGING.LOAN E ON CONVERT(VARCHAR,D.[MEMBER NUMBER]) = CONVERT(VARCHAR,E.MEMBER_NBR) AND CONVERT(VARCHAR,D.LOAN_NBR) = CONVERT(VARCHAR,E.LOAN_NBR) AND D.XPTIMESTAMP = E.XPTIMESTAMP
+WHERE z.[DATA SOURCE] = \'XP2-PURGED\'''' Timeout: 30 Result=> XPLoanHistoryPurged
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS PSL FACT LOAN
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temptable1
+SELECT
+ A.ACCOUNT_NUMBER, A.ASOFDATE
+ 
+ INTO #TEMPTABLE1 
+ 
+ FROM (
+
+SELECT [LoanStreet ID] ACCOUNT_NUMBER, ASOFDATE, ROW_NUMBER() OVER (PARTITION BY [LoanStreet ID] ORDER BY CAST(ASOFDATE AS DATE) DESC) AS ROWNUM FROM [NCino Data Files].dbo.STAGING_LOANSTREET ) A 
+WHERE A.ROWNUM = 1
+
+
+DELETE FROM [DW-LPA].DBO.FACT_LOAN WHERE [DATA SOURCE] = \'LOANSTREET\' AND Unique_ID IN (SELECT CONVERT(VARCHAR,[LoanStreet ID])+\'_LST\' FROM [NCino Data Files].DBO.STAGING_LOANSTREET)
+INSERT INTO [DW-LPA].DBO.Fact_Loan (
+
+[RecordID]
+      ,[AccountNumber]
+      ,[LoanType]
+      ,[PaymentAmount]
+      ,[PurposeCode]
+      ,[LoanTerm]
+      ,[PaymentFrequencyCode]
+      ,[DateofLoan]
+      ,[OriginalLoanAmount]
+      ,[InterestRateCode]
+      ,[InterestRate]
+      ,[LoanOfficer]
+      ,[OriginalCreditScore]
+      ,[COAmount]
+      ,[CODate]
+      ,[PricingTier]
+      ,[CollateralCode]
+      ,[Post_DTI]
+      ,[Pre_DTI]
+      ,[LTV]
+      ,[Member_Relationship]
+      ,[Co_Borrower]
+      ,[Unsecured_Debt_Ratio]
+      ,[Collateral_Condition]
+      ,[DealerCode]
+      ,[Unique_ID]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+      ,[PTI]
+      ,[DealerName]
+      ,[Branch_Code]
+      ,[Value]
+      ,[Seller_Code]
+      ,[Seller_Name]
+      ,[Vehicle_Make]
+      ,[Vehicle_Model]
+      ,[Vehicle_Year]
+      ,[Vehicle_Value]
+      ,[Time_in_Bureau]
+      ,[Delinquent_Trades]
+      ,[Dependents]
+      ,[Time_at_Residence]
+      ,[Time_On_Job]
+      ,[Data Source]
+      ,[XP CO AMOUNT]
+      ,[NCINO CO AMOUNT]
+      ,[XP NET CO]
+      ,[XP RECOVERY]
+      ,[EXCARDSTATUS]
+
+
+
+)
+
+SELECT DISTINCT
+
+\'L\' [RecordID]
+      , B.[LoanStreet ID]  [AccountNumber]
+	 , \'9999033\' [LOAN TYPE]
+	 ,0 [PaymentAmount] 
+  ,\'LOANSTREET\' [PurposeCode] 
+  , 48 [Original Term]
+  ,\'30\' [PaymentFrequencyCode]
+  ,B.[Origination Date]  [DateofLoan]
+  ,CONVERT(MONEY,B.[Original Principal]) * (CONVERT(FLOAT,REPLACE(B.[Ownership],\'%%\',\'\'))/100.00) [OriginalLoanAmount]
+  ,\'\'[InterestRateCode]
+  ,CONVERT(FLOAT,REPLACE(B.[Current Interest Rate],\'%%\',\'\'))/100.00 [RATE]
+  
+  
+  ,\'LOANSTREET\' [LoanOfficer]
+  ,B.[Credit Score] [OriginalCreditScore]
+  ,ISNULL(ABS(CONVERT(MONEY,B.[Charge Off Amount Owned])),0)-ISNULL(ABS(CONVERT(MONEY,B.[Recovery Amount Owned])),0) [COAmount]
+  ,IIF(ISDATE([CHARGED OFF DATE])=1,CAST([Charged Off Date] AS DATE),NULL) [CODate]
+  ,NULL [pricing tier]
+      , \'LOANSTREET\'  [CollateralCode]
+      ,NULL [Post_DTI]
+      ,NULL [Pre_DTI]
+      
+      ,NULL [LTV]
+      ,\'NON-MEMBER\'
+      ,\'\' [Co_Borrower]
+      ,NULL [Unsecured_Debt_Ratio]
+      ,NULL [Collateral_Condition]
+      ,NULL [DealerCode]
+	  ,CONVERT(VARCHAR,B.[LoanStreet ID])+\'_LST\'  [Unique_ID]
+	  , CONVERT(MONEY,B.[Original Principal]) * (CONVERT(FLOAT,REPLACE(B.[Ownership],\'%%\',\'\'))/100.00) [CreditLimit]
+	  ,B.[Last Principal Payment Date]  [Last Payment Date]
+      ,NULL [PTI]
+	  ,NULL [DEALERNAME]
+	  ,NULL [Branch_Code]
+	  ,NULL [VALUE]
+	  ,NULL SELLER_CODE
+	  ,NULL [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+  	  ,\'LOANSTREET\' [DATA SOURCE]
+	  , ABS(CONVERT(MONEY,B.[Charge Off Amount Owned])) [XP CO AMOUNT]
+	  ,NULL [NCINO CO AMOUNT]
+	  ,NULL [XP NET CO]
+  	  ,ABS(CONVERT(MONEY,B.[Recovery Amount Owned])) [XP RECOVERY]
+	  ,\'\' [CardStatus]
+
+	  
+
+
+
+
+FROM #TEMPTABLE1 A
+join [NCino Data Files].DBO.STAGING_LOANSTREET B ON A.ACCOUNT_NUMBER = B.[LoanStreet ID]  AND CAST(A.ASOFDATE AS DATE) = CAST(B.ASOFDATE AS DATE)
+
+
+
+
+
+DROP TABLE #TEMPTABLE1''' Timeout: 30 Result=> PSLLoan
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS PSL FACT LOAN HISTORY
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate DATE
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+Delete FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'PSL\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+		 [AsofDate]
+      ,[LastActivityDate]
+      ,[DaysDelinquent]
+      ,[Current_Balance]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+      ,[LastActivityType]
+      ,[LastUpdatedScore]
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+      ,[New_Credit_Score]
+      ,[DATA SOURCE]
+
+)
+
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+, IIF(Cast(z.Last_Payment_Date as date) IS NULL,CAST(A.Last_Payment_Date AS DATE),CAST(z.Last_Payment_Date AS DATE)) [LastActivityDate]
+, Days_Delinquent DaysDelinquent
+,ISNULL(IIF(CONVERT(FLOAT,z.[coamount])>0.00,0.00,CONVERT(FLOAT,[Loan_Bal_-_Month_End_Lender])),0) AS CurrentBalance
+,ISNULL([All_Disbursements_Bal_-_Original_Lender],0) AS CreditLimit
+,IIF(CAST(z.Last_Payment_Date AS DATE) IS NULL,CAST(A.Last_Payment_Date AS DATE),Cast(z.Last_Payment_Date AS DATE))  [Last ActivityDate]
+,\'\' [LastActivityType]
+,NULL [LastUpdatedScore]
+,0 [NumberOfTimes30-59]
+,0 [NumberOfTimes60-89]
+,0 [NumberOfTimes90-119]
+,0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,NULL [New_Credit_Score]
+,\'PSL\' [DATA SOURCE]
+
+FROM [DW-LPA].DBO.Fact_Loan z
+
+
+
+LEFT JOIN (SELECT
+			                                         CONVERT(VARCHAR,[LOAN_ID])+\'_PSL\' UNIQUE_ID2
+													,A.*
+													FROM [NCino Data Files].dbo.STAGING_STUDENT A
+													
+													
+													WHERE A.ASOFDATE = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+WHERE z.[DATA SOURCE] = \'PSL\'''' Timeout: 30 Result=> PSLHistory
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS PSCU FACT LOAN
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #TEMPTABLE1
+SELECT
+ A.ACCOUNT_NUMBER, A.ASOFDATE
+ 
+ INTO #TEMPTABLE1 
+ 
+ FROM (
+
+SELECT RIGHT([Card Account Number],8) ACCOUNT_NUMBER, ASOFDATE, ROW_NUMBER() OVER (PARTITION BY RIGHT([Card Account Number],8) ORDER BY CAST(ASOFDATE AS DATE) DESC) AS ROWNUM FROM [NCino Data Files].dbo.staging_PSCU ) A 
+WHERE A.ROWNUM = 1
+
+DROP TABLE IF EXISTS #TEMPTABLE2
+SELECT
+ A.ACCOUNT_NUMBER,  A.[Charge Off Date]
+ 
+ INTO #TEMPTABLE2 
+ 
+ FROM (
+
+SELECT RIGHT([Card Account Number],8) ACCOUNT_NUMBER, MIN(CAST([Charge Off Date] AS DATE )) [Charge Off Date] FROM [NCino Data Files].dbo.staging_PSCU WHERE CAST([Charge Off Date] AS DATE ) > \'1900-01-01\'
+GROUP BY RIGHT([Card Account Number],8)
+) A 
+
+DROP TABLE IF EXISTS #TEMPTABLE3
+SELECT
+ A.ACCOUNT_NUMBER,  A.[Charge Off Amount], a.[Charge Off Date]
+ 
+ INTO #TEMPTABLE3 
+ 
+ FROM (
+
+SELECT DISTINCT RIGHT([Card Account Number],8) ACCOUNT_NUMBER, b.[Charge Off Date], MAX(CONVERT(MONEY,REPLACE([Charge Off Amount],\'$\',\'\'))) [Charge Off Amount] FROM [NCino Data Files].dbo.staging_PSCU a
+JOIN #TEMPTABLE2 b ON RIGHT(a.[Card Account Number],8) = B.account_number AND A.[Charge Off Date] = B.[Charge Off Date]
+
+GROUP BY RIGHT([Card Account Number],8), b.[Charge Off Date]
+) A 
+
+DELETE FROM [DW-LPA].DBO.FACT_LOAN WHERE [DATA SOURCE] = \'PSCU\' AND Unique_ID IN (SELECT RIGHT(ACCOUNT_NUMBER,8) FROM #TEMPTABLE1)
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan
+
+SELECT DISTINCT
+
+\'C\' [RecordID]
+      , A.ACCOUNT_NUMBER [AccountNumber]
+	  , CASE WHEN [B].[OM Principal Number] = \'0000\' THEN \'9999034\'
+	         WHEN [B].[OM Principal Number] = \'0010\' THEN \'9999027\'
+			 WHEN [B].[OM Principal Number] = \'0020\' THEN \'9999025\'
+			 ELSE \'9999019\' END [LOAN TYPE]
+	 ,CONVERT(MONEY,REPLACE(B.[Last Payment Amount],\'$\',\'\')) [PaymentAmount]
+      ,\'CREDIT CARD\' [PurposeCode] 
+      ,48 [LoanTerm]
+      ,\'30\' [PaymentFrequencyCode]
+      ,B.[Card Open Date] [DateofLoan]
+      ,CONVERT(MONEY,REPLACE(B.[Credit Line Amount], \'$\',\'\')) [OriginalLoanAmount]
+      ,\'\'[InterestRateCode]
+	  ,CONVERT(FLOAT,REPLACE(B.[Purchase Annual Interest Rate],\'%%\',\'\'))/100 [RATE]
+
+      ,\'\' [LoanOfficer]
+      ,B.[Credit Bureau Score] [OriginalCreditScore]
+	 , IIF(c.[Charge Off Amount] - CONVERT(MONEY,REPLACE(REPLACE(REPLACE(b.[Current Balance Amount],\'(\',\'-\'),\'$\',\'\'),\')\',\'\')) = c.[Charge Off Amount],c.[Charge Off Amount],CONVERT(MONEY,REPLACE(REPLACE(REPLACE(b.[Current Balance Amount],\'(\',\'-\'),\'$\',\'\'),\')\',\'\'))) [COAmount]
+	 ,c.[Charge Off Date] [CODate]
+	  ,NULL [pricing tier]
+      , \'UNSECURED\'  [CollateralCode]
+      
+      ,NULL [Post_DTI]
+	  ,NULL [Pre_DTI]
+      
+      ,NULL [LTV]
+      ,\'EXISTING\'
+      ,IIF(B.[Primary Cardholder Social Security Number] IS NOT NULL,1,0) [Co_Borrower]
+      ,NULL [Unsecured_Debt_Ratio]
+      ,NULL [Collateral_Condition]
+      ,NULL [DealerCode]
+	  ,RIGHT(A.ACCOUNT_NUMBER,8)  [Unique_ID]
+	  ,CONVERT(MONEY, REPLACE(B.[Credit Line Amount], \'$\',\'\')) [CreditLimit]
+	  ,B.[Last Payment Date]
+	  ,NULL [PTI]
+	  ,NULL [DEALERNAME]
+	  ,NULL [Branch_Code]
+	  ,NULL [VALUE]
+	  ,NULL SELLER_CODE
+	  ,NULL [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+      ,\'PSCU\' [DATA SOURCE]
+	  , c.[Charge Off Amount] [XP CO AMOUNT]
+	  ,NULL [NCINO CO AMOUNT]
+	  ,NULL [XP NET CO]
+  	  ,c.[Charge Off Amount] - CONVERT(MONEY,REPLACE(REPLACE(REPLACE(b.[Current Balance Amount],\'(\',\'-\'),\'$\',\'\'),\')\',\'\')) [XP RECOVERY]
+	  ,B.[Card External Status]
+	  
+	  
+	  
+
+
+
+FROM #TEMPTABLE1 A
+JOIN [NCino Data Files].DBO.STAGING_PSCU B ON A.ACCOUNT_NUMBER = RIGHT(B.[Card Account Number],8) AND CAST(A.ASOFDATE AS DATE) = CAST(B.ASOFDATE AS DATE)
+LEFT JOIN #TEMPTABLE3 c ON RIGHT(b.[Card Account Number],8) = c.ACCOUNT_NUMBER 
+WHERE A.ACCOUNT_NUMBER <> \'20029363\'
+
+DROP TABLE #TEMPTABLE1''' Timeout: 30 Result=> PSCULoan
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS PSCU FACT LOAN HISTORY
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate DATE
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+DELETE FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'PSCU\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+		[AsofDate]
+      ,[LastActivityDate]
+	  ,[DaysDelinquent]
+	  ,[Current_Balance]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+	  ,[LastActivityType]
+	  ,[LastUpdatedScore]
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+	  ,[New_Credit_Score]
+	  ,[DATA SOURCE]
+
+)
+
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+,IIF(z.Last_Payment_Date IS NULL,A.[LAST PAYMENT DATE],z.Last_Payment_Date) [LastActivityDate]
+,IIF(A.[DELINQUENT DAYS COUNT]=\'0.00\',0,ROUND(A.[DELINQUENT DAYS COUNT],0)) DaysDelinquent
+,ISNULL(IIF((CONVERT(FLOAT,z.[coamount])>0.00 ) AND CAST(z.CODate AS DATE) <= @processdate,0.00,CONVERT(MONEY,REPLACE(REPLACE(REPLACE(A.[Current Balance Amount],\'(\',\'-\'),\'$\',\'\'),\')\',\'\'))),0.00) AS CurrentBalance
+,ISNULL(CONVERT(MONEY,REPLACE(a.[Credit Line Amount],\'$\',\'\')),0.00) AS CreditLimit
+,IIF(z.Last_Payment_Date IS NULL,A.[LAST PAYMENT DATE],z.Last_Payment_Date)  [Last ActivityDate]
+,\'\' [LastActivityType]
+,NULL [LastUpdateScore]
+,IIF(A.[Year to Date 1 Cycle Delinquent Count] = \'0.00\',0,ROUND(A.[Year to Date 1 Cycle Delinquent Count] ,0)) [NumberOfTimes30-59]
+,IIF(A.[Year to Date 2 Cycles Delinquent Count] = \'0.00\',0,ROUND(A.[Year to Date 2 Cycles Delinquent Count] ,0)) [NumberOfTimes60-89]
+,IIF(A.[Year to Date 3 Cycles Delinquent Count] = \'0.00\',0, ROUND(A.[Year to Date 3 Cycles Delinquent Count],0)) [NumberOfTimes90-119]
+, 0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,NULL [New_Credit_Score]
+,\'PSCU\' [DATA SOURCE]
+
+FROM [DW-LPA].DBO.Fact_Loan z
+
+
+
+LEFT JOIN (SELECT
+			                                         RIGHT(A.[Card Account Number],8) UNIQUE_ID2
+													,A.*
+													FROM [NCino Data Files].dbo.STAGING_PSCU A
+													
+													
+													WHERE A.ASOFDATE = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+WHERE z.[DATA SOURCE] = \'PSCU\' AND z.AccountNumber <> \'20029363\' ''' Timeout: 30 Result=> PSCUHIstory
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS LOANSTREET FACT LOAN
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temptable1
+SELECT
+ A.ACCOUNT_NUMBER, A.ASOFDATE
+ 
+ INTO #TEMPTABLE1 
+ 
+ FROM (
+
+SELECT [LoanStreet ID] ACCOUNT_NUMBER, ASOFDATE, ROW_NUMBER() OVER (PARTITION BY [LoanStreet ID] ORDER BY CAST(ASOFDATE AS DATE) DESC) AS ROWNUM FROM [NCino Data Files].dbo.STAGING_LOANSTREET ) A 
+WHERE A.ROWNUM = 1
+
+
+DELETE FROM [DW-LPA].DBO.FACT_LOAN WHERE [DATA SOURCE] = \'LOANSTREET\' AND Unique_ID IN (SELECT CONVERT(VARCHAR,[LoanStreet ID])+\'_LST\' FROM [NCino Data Files].DBO.STAGING_LOANSTREET)
+INSERT INTO [DW-LPA].DBO.Fact_Loan (
+
+[RecordID]
+      ,[AccountNumber]
+      ,[LoanType]
+      ,[PaymentAmount]
+      ,[PurposeCode]
+      ,[LoanTerm]
+      ,[PaymentFrequencyCode]
+      ,[DateofLoan]
+      ,[OriginalLoanAmount]
+      ,[InterestRateCode]
+      ,[InterestRate]
+      ,[LoanOfficer]
+      ,[OriginalCreditScore]
+      ,[COAmount]
+      ,[CODate]
+      ,[PricingTier]
+      ,[CollateralCode]
+      ,[Post_DTI]
+      ,[Pre_DTI]
+      ,[LTV]
+      ,[Member_Relationship]
+      ,[Co_Borrower]
+      ,[Unsecured_Debt_Ratio]
+      ,[Collateral_Condition]
+      ,[DealerCode]
+      ,[Unique_ID]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+      ,[PTI]
+      ,[DealerName]
+      ,[Branch_Code]
+      ,[Value]
+      ,[Seller_Code]
+      ,[Seller_Name]
+      ,[Vehicle_Make]
+      ,[Vehicle_Model]
+      ,[Vehicle_Year]
+      ,[Vehicle_Value]
+      ,[Time_in_Bureau]
+      ,[Delinquent_Trades]
+      ,[Dependents]
+      ,[Time_at_Residence]
+      ,[Time_On_Job]
+      ,[Data Source]
+      ,[XP CO AMOUNT]
+      ,[NCINO CO AMOUNT]
+      ,[XP NET CO]
+      ,[XP RECOVERY]
+      ,[EXCARDSTATUS]
+
+
+
+)
+
+SELECT DISTINCT
+
+\'L\' [RecordID]
+      , B.[LoanStreet ID]  [AccountNumber]
+	 , \'9999033\' [LOAN TYPE]
+	 ,0 [PaymentAmount] 
+  ,\'LOANSTREET\' [PurposeCode] 
+  , 48 [Original Term]
+  ,\'30\' [PaymentFrequencyCode]
+  ,B.[Origination Date]  [DateofLoan]
+  ,CONVERT(MONEY,B.[Original Principal]) * (CONVERT(FLOAT,REPLACE(B.[Ownership],\'%%\',\'\'))/100.00) [OriginalLoanAmount]
+  ,\'\'[InterestRateCode]
+  ,CONVERT(FLOAT,REPLACE(B.[Current Interest Rate],\'%%\',\'\'))/100.00 [RATE]
+  
+  
+  ,\'LOANSTREET\' [LoanOfficer]
+  ,B.[Credit Score] [OriginalCreditScore]
+  ,ISNULL(ABS(CONVERT(MONEY,B.[Charge Off Amount Owned])),0)-ISNULL(ABS(CONVERT(MONEY,B.[Recovery Amount Owned])),0) [COAmount]
+  ,IIF(ISDATE([CHARGED OFF DATE])=1,CAST([Charged Off Date] AS DATE),NULL) [CODate]
+  ,NULL [pricing tier]
+      , \'LOANSTREET\'  [CollateralCode]
+      ,NULL [Post_DTI]
+      ,NULL [Pre_DTI]
+      
+      ,NULL [LTV]
+      ,\'NON-MEMBER\'
+      ,\'\' [Co_Borrower]
+      ,NULL [Unsecured_Debt_Ratio]
+      ,NULL [Collateral_Condition]
+      ,NULL [DealerCode]
+	  ,CONVERT(VARCHAR,B.[LoanStreet ID])+\'_LST\'  [Unique_ID]
+	  , CONVERT(MONEY,B.[Original Principal]) * (CONVERT(FLOAT,REPLACE(B.[Ownership],\'%%\',\'\'))/100.00) [CreditLimit]
+	  ,B.[Last Principal Payment Date]  [Last Payment Date]
+      ,NULL [PTI]
+	  ,NULL [DEALERNAME]
+	  ,NULL [Branch_Code]
+	  ,NULL [VALUE]
+	  ,NULL SELLER_CODE
+	  ,NULL [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+  	  ,\'LOANSTREET\' [DATA SOURCE]
+	  , ABS(CONVERT(MONEY,B.[Charge Off Amount Owned])) [XP CO AMOUNT]
+	  ,NULL [NCINO CO AMOUNT]
+	  ,NULL [XP NET CO]
+  	  ,ABS(CONVERT(MONEY,B.[Recovery Amount Owned])) [XP RECOVERY]
+	  ,\'\' [CardStatus]
+
+	  
+
+
+
+
+FROM #TEMPTABLE1 A
+join [NCino Data Files].DBO.STAGING_LOANSTREET B ON A.ACCOUNT_NUMBER = B.[LoanStreet ID]  AND CAST(A.ASOFDATE AS DATE) = CAST(B.ASOFDATE AS DATE)
+
+
+
+
+
+DROP TABLE #TEMPTABLE1''' Timeout: 30 Result=> LoanStreetLoan
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS LOANSTREET FACT LOAN HISTORY
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate date
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+Delete FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'LOANSTREET\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+		 [AsofDate]
+      ,[LastActivityDate]
+      ,[DaysDelinquent]
+      ,[Current_Balance]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+      ,[LastActivityType]
+      ,[LastUpdatedScore]
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+      ,[New_Credit_Score]
+      ,[DATA SOURCE]
+
+)
+
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+,IIF(z.Last_Payment_Date IS NULL,A.[Last Principal Payment Date],z.Last_Payment_Date) [LastActivityDate]
+, IIF([Days Delinquent] = \'N/A\',0,[Days Delinquent]) DaysDelinquent
+,IIF(z.COAmount>0.00 AND codate <=@processdate,0.00,CONVERT(MONEY,[Principal Owned at Period End])) AS CurrentBalance
+,ISNULL(CONVERT(MONEY,A.[Original Principal]) * (CONVERT(FLOAT,REPLACE(A.[Ownership],\'%%\',\'\'))/100.00),0)  AS CreditLimit
+,IIF(z.Last_Payment_Date IS NULL,A.[Last Principal Payment Date],z.Last_Payment_Date)  [Last ActivityDate]
+,NULL lastActivityType
+,NULL [LastUpdatedScore]
+,0 [NumberOfTimes30-59]
+,0 [NumberOfTimes60-89]
+,0 [NumberOfTimes90-119]
+,0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,NULL [New_Credit_Score]
+,\'LOANSTREET\' [DATA SOURCE]
+
+FROM [DW-LPA].DBO.Fact_Loan z
+
+
+LEFT JOIN (SELECT
+			                                         CONVERT(VARCHAR,[A].[LoanStreet ID])+\'_LST\' UNIQUE_ID2
+													,A.*
+													FROM [NCino Data Files].dbo.STAGING_LOANSTREET A
+													
+													
+													WHERE A.ASOFDATE = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+WHERE z.[DATA SOURCE] = \'LOANSTREET\'''' Timeout: 30 Result=> LoanStreetLoan
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS LOANSOURCE FACT LOAN
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #TEMPTABLE1
+SELECT
+ A.ACCOUNT_NUMBER, CAST(A.ASOFDATE AS DATE) ASOFDATE
+ 
+ INTO #TEMPTABLE1 
+ 
+ FROM (
+
+SELECT [Loan Number] ACCOUNT_NUMBER, ASOFDATE, ROW_NUMBER() OVER (PARTITION BY [Loan Number] ORDER BY CAST(ASOFDATE AS DATE) DESC) AS ROWNUM FROM [NCino Data Files].dbo.STAGING_LOANSOURCE ) A 
+WHERE A.ROWNUM = 1
+
+
+DELETE FROM [DW-LPA].DBO.FACT_LOAN WHERE [DATA SOURCE] = \'LOANSOURCE\' AND Unique_ID IN (SELECT CONVERT(VARCHAR,[Loan Number])+\'_LS\' FROM [NCino Data Files].DBO.STAGING_LOANSOURCE)
+INSERT INTO [DW-LPA].DBO.Fact_Loan (
+
+[RecordID]
+      ,[AccountNumber]
+      ,[LoanType]
+      ,[PaymentAmount]
+      ,[PurposeCode]
+      ,[LoanTerm]
+      ,[PaymentFrequencyCode]
+      ,[DateofLoan]
+      ,[OriginalLoanAmount]
+      ,[InterestRateCode]
+      ,[InterestRate]
+      ,[LoanOfficer]
+      ,[OriginalCreditScore]
+      ,[COAmount]
+      ,[CODate]
+      ,[PricingTier]
+      ,[CollateralCode]
+      ,[Post_DTI]
+      ,[Pre_DTI]
+      ,[LTV]
+      ,[Member_Relationship]
+      ,[Co_Borrower]
+      ,[Unsecured_Debt_Ratio]
+      ,[Collateral_Condition]
+      ,[DealerCode]
+      ,[Unique_ID]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+      ,[PTI]
+      ,[DealerName]
+      ,[Branch_Code]
+      ,[Value]
+      ,[Seller_Code]
+      ,[Seller_Name]
+      ,[Vehicle_Make]
+      ,[Vehicle_Model]
+      ,[Vehicle_Year]
+      ,[Vehicle_Value]
+      ,[Time_in_Bureau]
+      ,[Delinquent_Trades]
+      ,[Dependents]
+      ,[Time_at_Residence]
+      ,[Time_On_Job]
+      ,[Data Source]
+      ,[XP CO AMOUNT]
+      ,[NCINO CO AMOUNT]
+      ,[XP NET CO]
+      ,[XP RECOVERY]
+      ,[EXCARDSTATUS]
+
+)
+
+SELECT DISTINCT
+
+\'L\' [RecordID]
+      , B.[Loan Number]  [AccountNumber]
+	 , \'9999032\' [LOAN TYPE]
+	 ,0 [PaymentAmount] 
+  ,\'LOANSOURCE\' [PurposeCode] 
+  , [Original Term]
+  ,\'30\' [PaymentFrequencyCode]
+  ,B.[Note Date]  [DateofLoan]
+  ,CONVERT(MONEY,B.[ Amt Fin - Neighbors CU ]) [OriginalLoanAmount]
+  ,\'\'[InterestRateCode]
+  ,REPLACE(B.[Original Rate],\'%%\',\'\')/100.00 [RATE]
+  
+  
+  ,\'CULS\' [LoanOfficer]
+  ,B.[Orig FICO Score] [OriginalCreditScore]
+  ,IIF(B.[Account Status]=\'Chargeoff\',CONVERT(MONEY,[B].[ Current Balance - Neighbors CU ]),0.00) [COAMOUNT]
+  ,IIF(B.[Account Status]=\'Chargeoff\',[B].[Charge Off Date],null) [CODate]
+   ,NULL [pricing tier]
+      , \'CULS AUTO\'  [CollateralCode]
+       ,NULL [Post_DTI]
+      ,NULL [Pre_DTI]
+     
+      ,NULL [LTV]
+      ,\'NON-MEMBER\'
+      ,\'\' [Co_Borrower]
+      ,NULL [Unsecured_Debt_Ratio]
+      ,NULL [Collateral_Condition]
+      ,NULL [DealerCode]
+	  ,CONVERT(VARCHAR,B.[Loan Number])+\'_LS\'  [Unique_ID]
+      , CONVERT(MONEY, B.[ Amt Fin - Neighbors CU ]) [CreditLimit]
+	  ,B.[Last Payment Date]  [Last Payment Date]
+	  ,NULL [PTI]
+	  ,NULL [DEALERNAME]
+	  ,NULL [Branch_Code]
+	   ,NULL [VALUE]
+	  ,NULL SELLER_CODE
+	  ,NULL [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+	  ,\'LOANSOURCE\' [DATA SOURCE]
+	  , CAST(REPLACE(REPLACE(B.[ Charge Off Amt - Neighbors CU ],\'$-\',\'\'),\'-\',\'\') AS MONEY) [XP CO AMOUNT]
+	  ,NULL [NCINO CO AMOUNT]
+	  ,NULL [XP NET CO]
+  	  ,B.[ Recovery ] [XP RECOVERY]
+	  ,\'\' CardStatus
+
+	  
+	  
+
+
+
+
+
+FROM #TEMPTABLE1 A
+JOIN [NCino Data Files].DBO.STAGING_LOANSOURCE B ON A.ACCOUNT_NUMBER = B.[Loan Number]  AND CAST(A.ASOFDATE AS DATE) = CAST(B.ASOFDATE AS DATE)
+
+--SELECT * FROM #TEMPTABLE1
+
+
+DROP TABLE #TEMPTABLE1''' Timeout: 30 Result=> LoanSourceLoan
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS LOANSOURCE FACT LOAN HISTORY
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate DATE
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+Delete FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'LOANSOURCE\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+		[AsofDate]
+      ,[LastActivityDate]
+      ,[DaysDelinquent]
+      ,[Current_Balance]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+      ,[LastActivityType]
+      ,[LastUpdatedScore]
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+      ,[New_Credit_Score]
+      ,[DATA SOURCE]
+
+)
+
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+,IIF(z.Last_Payment_Date IS NULL,A.[Last Payment Date],z.Last_Payment_Date) [LastActivityDate]
+, [DAYS PAST DUE] DaysDelinquent
+,ISNULL(IIF(a.[account status] = \'ChargeOff\',0.00, CONVERT(FLOAT,A.[ Current Balance - Neighbors CU ])),0.00) AS CurrentBalance
+,ISNULL(CONVERT(MONEY,a.[ Amount Financed ]),0)  AS CreditLimit
+,IIF(z.Last_Payment_Date IS NULL,A.[Last Payment Date],z.Last_Payment_Date)  [Last ActivityDate]
+,\'\' LastActivityType
+,NULL LastUpdatedScore
+,[DAYS LATE 30] [NumberOfTimes30-59]
+,[DAYS LATE 60] [NumberOfTimes60-89]
+,[DAYS LATE 90] [NumberOfTimes90-119]
+,0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,NULL [New_Credit_Score]
+,\'LOANSOURCE\' [DATA SOURCE]
+
+FROM [DW-LPA].DBO.Fact_Loan z
+
+
+
+LEFT JOIN (SELECT
+			                                         CONVERT(VARCHAR,[A].[Loan Number])+\'_LS\' UNIQUE_ID2
+													,A.*
+													FROM [NCino Data Files].dbo.STAGING_LOANSOURCE A
+													
+													
+													WHERE A.ASOFDATE = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+WHERE z.[DATA SOURCE] = \'LOANSOURCE\'''' Timeout: 30 Result=> LoanSourceHistory
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS CSL FACT LOAN
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temptable1
+SELECT
+ A.ACCOUNT_NUMBER, A.ASOFDATE
+ 
+ INTO #TEMPTABLE1 
+ 
+ FROM (
+
+SELECT Loan_ID ACCOUNT_NUMBER, ASOFDATE, ROW_NUMBER() OVER (PARTITION BY Loan_ID ORDER BY CAST(ASOFDATE AS DATE) DESC) AS ROWNUM FROM [NCino Data Files].dbo.STAGING_CONSOLIDATED_STUDENT ) A 
+WHERE A.ROWNUM = 1
+
+
+DELETE FROM [DW-LPA].DBO.FACT_LOAN WHERE [DATA SOURCE] = \'CSL\' AND Unique_ID IN (SELECT CONVERT(VARCHAR,Loan_ID)+\'_CSL\' FROM [NCino Data Files].DBO.STAGING_CONSOLIDATED_STUDENT)
+INSERT INTO [DW-LPA].DBO.Fact_Loan
+
+SELECT DISTINCT
+
+\'L\' [RecordID]
+      , B.Loan_ID [AccountNumber]
+	 , CASE WHEN B.Program_Name = \'CUGRAD\' THEN \'9999015\'
+	         WHEN B.Program_Name = \'CUSCHOLAR\' THEN \'9999017\'
+			 WHEN B.Program_Name = \'NEIGHBORSCONSOLIDATION\' THEN \'9999016\'
+			 ELSE \'9999018\' END [LOAN TYPE]
+	 ,B.[Prin_Pmt_-_Monthly_Lender] [PaymentAmount]
+  ,B.Program_Name [PurposeCode] 
+  ,B.Term_To_Maturity_Months  [LoanTerm]
+  ,\'30\' [PaymentFrequencyCode]
+  ,B.First_Disbursement_Date [DateofLoan]
+  ,B.[All_Disbursements_Bal_-_Original_Lender] [OriginalLoanAmount]
+  ,\'\'[InterestRateCode]
+  ,B.Current_Rate_Pct/100.00 [RATE]
+  ,\'\' [LoanOfficer]
+  ,B.Risk_Score [OriginalCreditScore]
+  ,IIF(CONVERT(MONEY,B.Charge_Off_Prin_Lifetime_Lender)>0.00, CONVERT(MONEY,B.Charge_Off_Prin_Lifetime_Lender) - CONVERT(MONEY,B.Default_Recoveries_Lender),0.00) [COAmount]
+  , CAST(IIF(CONVERT(MONEY,B.Charge_Off_Prin_Lifetime_Lender)>0.00, B.Loan_Status_Last_Updated, NULL) AS DATE)  [CODate]
+  ,NULL [pricing tier]
+      , B.Program_Name  [CollateralCode]
+     ,NULL [Post_DTI]
+      ,NULL [Pre_DTI]
+      
+      ,NULL [LTV]
+      ,\'EXISTING\'
+      ,\'\' [Co_Borrower]
+      ,NULL [Unsecured_Debt_Ratio]
+      ,NULL [Collateral_Condition]
+      ,NULL [DealerCode]
+	  ,CONVERT(VARCHAR,B.Loan_ID)+\'_CSL\'  [Unique_ID]
+	  , B.[All_Disbursements_Bal_-_Original_Lender] [CreditLimit]
+	  ,B.Last_Payment_Date [Last Payment Date]
+      
+	  ,NULL [PTI]
+	   ,NULL [DEALERNAME]
+	   ,NULL [Branch_Code]
+	    ,NULL [VALUE]
+	  ,NULL SELLER_CODE
+	  ,NULL [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+     
+	  ,\'CSL\' [DATA SOURCE]
+	  , IIF(CONVERT(MONEY,B.Charge_Off_Prin_Lifetime_Lender)>0.00, CONVERT(MONEY,B.Charge_Off_Prin_Lifetime_Lender),0.00) [XP CO AMOUNT]
+	  , NULL [NCINO CO AMOUNT]
+	  ,NULL [XP NET CO]
+  	  ,B.Default_Recoveries_Lender [XP RECOVERY]
+	  ,NULL [External Card Status]
+
+	  
+	   
+	  
+
+
+
+FROM #TEMPTABLE1 A
+JOIN [NCino Data Files].DBO.STAGING_CONSOLIDATED_STUDENT B ON A.ACCOUNT_NUMBER = B.Loan_ID  AND CAST(A.ASOFDATE AS DATE) = CAST(B.ASOFDATE AS DATE)
+
+
+
+
+DROP TABLE #TEMPTABLE1''' Timeout: 30 Result=> CSLLoan
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS CSL FACT LOAN HISTORY
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate date
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+Delete FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'CSL\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+		[AsofDate]
+      ,[LastActivityDate]
+	  ,[DaysDelinquent]
+      ,[Current_Balance]
+	  ,[CreditLimit]
+      ,[Last_Payment_Date]
+	  ,LastActivityType
+	  ,LastUpdatedScore
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+	  ,New_Credit_Score
+	  ,[DATA SOURCE]
+
+)
+
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+,IIF(z.Last_Payment_Date is null,A.Last_Payment_Date,z.Last_Payment_Date) [LastActivityDate]
+, Days_Delinquent DaysDelinquent
+
+,isnull(IIF(convert(float,z.[coamount])>0.00 AND z.CODate<=@processdate,0.00,Convert(float,[Loan_Bal_-_Month_End_Lender])),0) AS CurrentBalance
+,isnull([All_Disbursements_Bal_-_Original_Lender],0) AS CreditLimit
+,IIF(z.Last_Payment_Date IS NULL,A.Last_Payment_Date,z.Last_Payment_Date)  [Last ActivityDate]
+,\'\' LastActivityType
+,NULL LastUpdatedScore
+,0 [NumberOfTimes30-59]
+,0 [NumberOfTimes60-89]
+,0 [NumberOfTimes90-119]
+,0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,NULL New_Credit_Score
+,\'CSL\' [DATA SOURCE]
+
+FROM [DW-LPA].DBO.Fact_Loan z
+
+
+
+LEFT JOIN (SELECT
+			                                         CONVERT(VARCHAR,[LOAN_ID])+\'_CSL\' UNIQUE_ID2
+													,A.*
+													FROM [NCino Data Files].dbo.STAGING_CONSOLIDATED_STUDENT A
+													
+													
+													WHERE A.ASOFDATE = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+WHERE z.[DATA SOURCE] = \'CSL\'''' Timeout: 30 Result=> CSLHistory
+Database.Close Connection: SQLConnection
+DISABLE Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS RAYMOND JAMES FACT LOAN
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DROP TABLE IF EXISTS #temptable1
+SELECT
+ A.ACCOUNT_NUMBER, [Loan ID], A.ASOFDATE
+ INTO #TEMPTABLE1 
+ 
+ FROM (
+
+SELECT ACCOUNT ACCOUNT_NUMBER, [Loan ID], ASOFDATE, ROW_NUMBER() OVER (PARTITION BY Account, [Loan ID] ORDER BY ASOFDATE DESC) AS ROWNUM FROM [NCino Data Files].dbo.staging_RaymondJames ) A 
+WHERE A.ROWNUM = 1
+
+
+
+
+DELETE FROM [DW-LPA].DBO.FACT_LOAN WHERE [DATA SOURCE] = \'RAYMONDJAMES\' AND Unique_ID IN (SELECT CONVERT(VARCHAR,ACCOUNT_NUMBER) + CONVERT(VARCHAR,[LOAN ID])+\'_RJ\' FROM #TEMPTABLE1)
+INSERT INTO [DW-LPA].DBO.Fact_Loan
+
+SELECT DISTINCT
+
+\'L\' [RecordID]
+      , CONVERT(VARCHAR,A.ACCOUNT_NUMBER) + CONVERT(VARCHAR,a.[LOAN ID]) [AccountNumber]
+	 ,[Loan Type]
+	 , CONVERT(MONEY,PAYMENT) * CONVERT(MONEY,REPLACE([Ownership Percent],\'%%\',\'\'))/100 [PaymentAmount] 
+     ,\'\'  [PurposeCode] 
+      ,B.TERM [LoanTerm]
+     ,\'30\' [PaymentFrequencyCode]
+      ,B.[OPEN DATE] [DateofLoan]
+      , CONVERT(MONEY,[Original Balance]) *  CONVERT(MONEY,REPLACE([Ownership Percent],\'%%\',\'\'))/100 [OriginalLoanAmount]
+	  ,\'\'[InterestRateCode]
+      ,B.APR/100.00 [RATE]
+      ,\'\' [LoanOfficer]
+	  ,B.FICO [OriginalCreditScore]
+	    , IIF(CONVERT(MONEY,[Charge Off Amount]) > 0.00, CONVERT(MONEY,[Ownership Balance]),0.00)  [Charge Off Amount]
+   ,CASE WHEN ISNUMERIC(b.[Charge off Date])=1 THEN  null
+         ELSE IIF(CONVERT(MONEY,[Charge Off Amount]) > 0.00, B.[Charge off Date],NULL) END [CODate]
+	,NULL [pricing tier]
+      , B.[Loan Type]  [CollateralCode]
+     ,DTI [Post_DTI]
+      ,NULL [Pre_DTI]
+      
+      ,LTV [LTV]
+	  ,\'Existing\'
+      ,\'\' [Co_Borrower]
+      ,NULL [Unsecured_Debt_Ratio]
+      ,NULL [Collateral_Condition]
+      ,NULL [DealerCode]
+	  ,CONVERT(VARCHAR,A.ACCOUNT_NUMBER) + CONVERT(VARCHAR,a.[LOAN ID])+\'_RJ\'  [Unique_ID]
+	  , CONVERT(MONEY,[Original Balance]) *  CONVERT(MONEY,REPLACE([Ownership Percent],\'%%\',\'\'))/100 CreditLimit
+      ,b.[Last Transaction Date] [Last Payment Date]
+	  
+	  ,NULL [PTI]
+	  
+	  ,NULL [DEALERNAME]
+	  ,NULL [Branch_Code]
+	  ,NULL [VALUE]
+	  ,NULL SELLER_CODE
+	  ,NULL [SELLER_NAME]
+	  ,NULL [VEHICLE MAKE]
+	  ,NULL [VEHICLE MODEL]
+	  ,NULL [VEHICLE YEAR]
+	  ,NULL [VEHICLE VALUE]
+	  ,NULL [TIME IN BUREAU]
+	  ,NULL [DELINQUENT TRADES]
+	  ,NULL [DEPENDENTS]
+	  ,NULL [TIME AT RESIDENCE]
+	  ,NULL [TIME ON JOB]
+      ,\'RAYMONDJAMES\' [DATA SOURCE]
+	  , CONVERT(money,[Charge Off Amount]) [XP CO AMOUNT]
+	  ,NULL [NCINO CO AMOUNT]
+	  ,NULL [XP NET CO]
+  	  , IIF(CONVERT(MONEY,[charge off amount])>0,(CONVERT(money,[Charge Off Amount]) / B.[Ownership Percent]/100.00) - B.[Ownership Balance],0) [XP RECOVERY]
+	  ,NULL [External Card Data]
+
+	  
+      
+
+
+
+FROM #TEMPTABLE1 A
+JOIN [NCino Data Files].DBO.STAGING_RaymondJames B ON CONVERT(FLOAT,A.ACCOUNT_NUMBER) = CONVERT(FLOAT,B.Account) AND a.[LOAN ID] = b.[Loan ID] AND A.ASOFDATE = B.ASOFDATE;''' Timeout: 30 Result=> RaymondJamesLoan
+DISABLE Database.Close Connection: SQLConnection
+DISABLE Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS RAYMOND JAMES FACT LOAN HISTORY
+DISABLE Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate date
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+Delete FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate = @ProcessDate  AND [DATA SOURCE] = \'RaymondJames\'
+
+
+INSERT INTO [DW-LPA].DBO.Fact_Loan_History (
+		[AsofDate]
+      ,[LastActivityDate]
+      ,[DaysDelinquent]
+      ,[Current_Balance]
+      ,[CreditLimit]
+      ,[Last_Payment_Date]
+      ,[LastActivityType]
+      ,[LastUpdatedScore]
+      ,[NumberofTimes30-59]
+      ,[NumberofTimes60-89]
+      ,[NumberofTimes90-119]
+      ,[NumberofTimes120ormore]
+      ,[Unique_ID]
+      ,[New_Credit_Score]
+      ,[DATA SOURCE]
+
+)
+
+
+SELECT DISTINCT
+
+@ProcessDate AS AsofDate
+,IIF(z.Last_Payment_Date IS NULL,a.[Last Transaction Date],z.Last_Payment_Date) [LastActivityDate]
+, [DAYS past Due] DaysDelinquent
+,ISNULL(IIF(CONVERT(FLOAT,z.[coamount])>0.00,0.00,
+CONVERT(MONEY,[Ownership Balance])
+),0) AS CurrentBalance
+,ISNULL(CONVERT(MONEY,[Original Balance])*[Ownership Percent]/100.00,0) AS CreditLimit
+,IIF(z.Last_Payment_Date IS NULL,a.[Last Transaction Date],z.Last_Payment_Date)  [Last ActivityDate]
+,\'\' LastActivityType
+,NULL LastUpdatedCreditScore
+,0 [NumberOfTimes30-59]
+,0 [NumberOfTimes60-89]
+,0 [NumberOfTimes90-119]
+,0 [NumberOfTimes120ormore]
+,z.Unique_ID
+,NULL New_Credit_Score
+,\'RaymondJames\' [DATA SOURCE]
+
+FROM [DW-LPA].DBO.Fact_Loan z
+
+
+
+LEFT JOIN (SELECT
+			                                         CONVERT(VARCHAR,A.ACCOUNT) + CONVERT(VARCHAR,a.[LOAN ID])+\'_RJ\' UNIQUE_ID2
+													,A.*
+													FROM [NCino Data Files].dbo.STAGING_RaymondJames A
+													
+													
+													WHERE A.ASOFDATE = @ProcessDate
+													
+													) A ON  a.UNIQUE_ID2 = z.Unique_ID
+WHERE z.[DATA SOURCE] = \'RaymondJames\'''' Timeout: 30 Result=> CSLHistory
+DISABLE Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# PROCESS CUMULATIVE LOSS HISTORY
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @ProcessDate date
+SET @ProcessDate = \'%Year%-%Month%-%Day%\'
+
+DELETE FROM [DW-LPA].DBO.Fact_Cumulative_Average_Balance WHERE AsofDate = @ProcessDate
+
+INSERT INTO [DW-LPA].DBO.Fact_Cumulative_Average_Balance (AsOfDate, Unique_ID, Cumulative_Monthly_Average_Balance)
+
+SELECT a.ASOFDate, a.UNIQUE_ID, Avg(b.Cumulative_Balance) FROM [DW-LPA].DBO.Fact_Loan_History as a
+LEFT JOIN (SELECT Unique_ID,SUM(Current_Balance)/IIF(Count(distinct AsofDate)<12,Count(Distinct AsofDate),12) as Cumulative_Balance FROM [DW-LPA].DBO.Fact_Loan_History WHERE AsofDate Between DateAdd(mm,-12,@ProcessDate) AND @ProcessDate  GROUP BY Unique_ID) as b ON  b.Unique_ID = a.Unique_ID
+WHERE a.AsofDate = @ProcessDate AND a.Unique_ID is not null
+
+GROUP BY a.AsOFDate, A.Unique_ID, b.Cumulative_Balance''' Timeout: 2400 Result=> QueryResult2
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# LOAD NET WORTH TABLE
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\CU MONTHEND METRICS\\Net Worth.csv\'
+DECLARE @FILELOC2 VARCHAR(MAX)
+
+
+DROP TABLE IF EXISTS #temptable10
+CREATE TABLE #temptable10 (
+[AsofDate] [DATETIME] NULL,
+	[Net Worth] [FLOAT] NULL
+
+)
+
+DECLARE @SQL2 VARCHAR(MAX)
+SET @SQL2 = \'
+
+BULK INSERT #temptable10 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		--FORMAT = \'\'CSV\'\',
+		--FIELDQUOTE = \'\'\"\'\',
+		FIELDTERMINATOR = \'\',\'\',
+  ROWTERMINATOR = \'\'\\n\'\',
+  FIRSTROW = 2
+		
+		
+		);\'
+EXEC(@SQL2)
+DELETE FROM [DW-LPA].dbo.Fact_History_NetWorth
+INSERT INTO [DW-LPA].dbo.Fact_History_NetWorth
+(
+  [AsofDate]
+      ,[Net Worth]
+
+)
+SELECT 
+[AsofDate]
+      ,[Net Worth]
+
+FROM #temptable10''' Timeout: 2400
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# LOAD COST OF FUNDS TABLE
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\CU MONTHEND METRICS\\Cost of Funds.csv\'
+DECLARE @FILELOC2 VARCHAR(MAX)
+
+
+DROP TABLE IF EXISTS #temptable9
+CREATE TABLE #temptable9 (
+[AsOfDate] [DATE] NULL,
+	[COF] [FLOAT] NULL
+
+)
+
+DECLARE @SQL2 VARCHAR(MAX)
+SET @SQL2 = \'
+
+BULK INSERT #temptable9 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		--FORMAT = \'\'CSV\'\',
+		--FIELDQUOTE = \'\'\"\'\',
+		FIELDTERMINATOR = \'\',\'\',
+  ROWTERMINATOR = \'\'\\n\'\',
+  FIRSTROW = 2
+		
+		
+		);\'
+EXEC(@SQL2)
+DELETE FROM [DW-LPA].dbo.Fact_COF
+INSERT INTO [DW-LPA].dbo.Fact_COF
+(
+    [AsOfDate]
+      ,[COF]
+
+)
+SELECT 
+[AsOfDate]
+      ,[COF]
+
+FROM #temptable9''' Timeout: 2400
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# LOAD LENDERS PROTECTION FEE TABLE
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\CU MONTHEND METRICS\\LP Fees.csv\'
+DECLARE @FILELOC2 VARCHAR(MAX)
+
+
+DROP TABLE IF EXISTS #temptable8
+CREATE TABLE #temptable8 (
+[AsofDate] [DATE] NULL,
+	[LoanType] [VARCHAR](50) NULL,
+	[LoanCode] [VARCHAR](50) NULL,
+	[LastAmortAmount] [FLOAT] NULL
+
+)
+
+DECLARE @SQL2 VARCHAR(MAX)
+SET @SQL2 = \'
+
+BULK INSERT #temptable8
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		--FORMAT = \'\'CSV\'\',
+		--FIELDQUOTE = \'\'\"\'\',
+		FIELDTERMINATOR = \'\',\'\',
+  ROWTERMINATOR = \'\'\\n\'\',
+  FIRSTROW = 2
+		
+		
+		);\'
+EXEC(@SQL2)
+DELETE FROM [DW-LPA].dbo.Fact_History_LP_Fee
+INSERT INTO [DW-LPA].dbo.Fact_History_LP_Fee
+(
+  [AsofDate]
+      ,[LoanType]
+      ,[LoanCode]
+      ,[LastAmortAmount]
+
+)
+SELECT 
+[AsofDate]
+      ,[LoanType]
+      ,[LoanCode]
+      ,[LastAmortAmount]
+
+FROM #temptable8''' Timeout: 2400
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# LOAD ROAA TABLE
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\CU MONTHEND METRICS\\Target ROAA.csv\'
+DECLARE @FILELOC2 VARCHAR(MAX)
+
+
+DROP TABLE IF EXISTS #temptable7
+CREATE TABLE #temptable7 (
+[AsofDate] [DATETIME] NULL,
+	[Target ROAA] [FLOAT] NULL
+
+)
+
+DECLARE @SQL2 VARCHAR(MAX)
+SET @SQL2 = \'
+
+BULK INSERT #temptable7 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		--FORMAT = \'\'CSV\'\',
+		--FIELDQUOTE = \'\'\"\'\',
+		FIELDTERMINATOR = \'\',\'\',
+  ROWTERMINATOR = \'\'\\n\'\',
+  FIRSTROW = 2
+		
+		
+		);\'
+EXEC(@SQL2)
+DELETE FROM [DW-LPA].dbo.Fact_Target_ROAA
+INSERT INTO [DW-LPA].dbo.Fact_Target_ROAA
+(
+  [AsofDate]
+      ,[Target ROAA]
+
+)
+SELECT 
+[AsofDate]
+      ,[Target ROAA]
+
+FROM #temptable7 WHERE AsofDate IS NOT NULL''' Timeout: 2400
+Database.Close Connection: SQLConnection
+Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
+# LOAD RISK FREE RATE TABLE
+Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''DECLARE @FILELOC VARCHAR(MAX) = \'\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\CU MONTHEND METRICS\\RISK FREE RATE.csv\'
+DECLARE @FILELOC2 VARCHAR(MAX)
+
+
+DROP TABLE IF EXISTS #temptable6
+CREATE TABLE #temptable6 (
+[AsofDate] [DATE] NULL,
+	[RiskFreeRate] [FLOAT] NULL
+
+)
+
+DECLARE @SQL2 VARCHAR(MAX)
+SET @SQL2 = \'
+
+BULK INSERT #temptable6 
+
+FROM \'\'\'+ @FILELOC + \'\'\'
+WITH (
+
+
+		--FORMAT = \'\'CSV\'\',
+		--FIELDQUOTE = \'\'\"\'\',
+		FIELDTERMINATOR = \'\',\'\',
+  ROWTERMINATOR = \'\'\\n\'\',
+  FIRSTROW = 2
+		
+		
+		);\'
+EXEC(@SQL2)
+DELETE FROM [DW-LPA].dbo.Fact_Risk_Free_Rate
+INSERT INTO [DW-LPA].dbo.Fact_Risk_Free_Rate
+(
+  [AsofDate]
+      ,[RiskFreeRate]
+
+)
+SELECT 
+[AsofDate]
+      ,[RiskFreeRate]
+
+FROM #temptable6''' Timeout: 2400
+Database.Close Connection: SQLConnection
+Folder.GetFiles Folder: $'''W:\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER''' FileFilter: $'''*''' IncludeSubfolders: False FailOnAccessDenied: True SortBy1: Folder.SortBy.NoSort SortDescending1: False SortBy2: Folder.SortBy.NoSort SortDescending2: False SortBy3: Folder.SortBy.NoSort SortDescending3: False Files=> Files2
+File.Delete Files: Files2
