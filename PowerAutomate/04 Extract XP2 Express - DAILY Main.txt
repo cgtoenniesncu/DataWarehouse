@@ -934,7 +934,7 @@ FROM
     SELECT ASOFDATE,
            ROW_NUMBER() OVER (ORDER BY ASOFDATE DESC) rownum
     FROM ReferenceTables.dbo.Dim_FileDate
-    WHERE ASOFDATE >=\'2025-01-31\' AND ASOFDATE NOT IN (SELECT asofdate FROM #ShareStatusDates GROUP BY Asofdate)
+    WHERE ASOFDATE >=\'2026-01-28\' --AND ASOFDATE NOT IN (SELECT asofdate FROM #ShareStatusDates GROUP BY Asofdate)
     GROUP BY ASOFDATE
 ) a;
 
@@ -946,7 +946,34 @@ DROP TABLE IF EXISTS #purged_1
 
 SELECT * INTO #purged_1 FROM (
 
-SELECT * FROM DW1.dbo.Dim_Purged_Accts
+SELECT * FROM DW1.dbo.Dim_Purged_Accts 
+
+)a
+
+DROP TABLE IF EXISTS #reopenedpurge
+
+SELECT * INTO #reopenedpurge FROM ( 
+
+SELECT MEMBER_NBR, SHARE_NBR, MIN(XPTIMESTAMP) ReopenDate FROM XP2_Daily_ODS_New.DB2INST1.Share WHERE CONVERT(VARCHAR,MEMBER_NBR) + \'_\' + CONVERT(VARCHAR,SHARE_NBR) IN (SELECT CONVERT(VARCHAR,Member_Nbr) + \'_\' + CONVERT(VARCHAR,Share_Nbr) FROM #purged_1) AND BALANCE <>0
+GROUP BY MEMBER_NBR, SHARE_NBR
+Having
+MAX(XPTIMESTAMP) > \'2024-12-31\'
+) a
+
+DELETE 
+--SELECT * 
+
+FROM DW1.dbo.Dim_Purged_Accts WHERE CONVERT(VARCHAR,Member_Nbr) + \'_\' + CONVERT(VARCHAR,Share_Nbr) IN (SELECT CONVERT(VARCHAR,Member_Nbr) + \'_\' + CONVERT(VARCHAR,Share_Nbr) FROM #reopenedpurge)
+
+INSERT INTO DW1.dbo.Dim_Purged_Accts
+SELECT * FROM #reopenedpurge
+
+
+DROP TABLE IF EXISTS #purged_3
+
+SELECT * INTO #purged_3 FROM (
+
+SELECT * FROM DW1.dbo.Dim_Purged_Accts WHERE reopenDate IS null
 
 )a
 
@@ -1055,7 +1082,7 @@ FROM
     SELECT * FROM #temp25
 ) a
 LEFT JOIN (SELECT * FROM DW1.dbo.dim_CombinedProductCodes WHERE [Loan/Deposit] = \'Deposit\') b ON a.SHARE_TYPE = b.[Type]
-LEFT JOIN (SELECT * FROM #purged_1) pg ON a.MEMBER_NBR = pg.member_nbr AND a.SHARE_NBR = pg.share_nbr AND \'2024-12-31\' >= a.OPEN_DATE
+LEFT JOIN (SELECT * FROM #purged_3) pg ON a.MEMBER_NBR = pg.member_nbr AND a.SHARE_NBR = pg.share_nbr AND \'2024-12-31\' >= a.OPEN_DATE
 LEFT JOIN  #temp23 ap ON a.MEMBER_NBR = ap.MEMBER_NBR AND a.SHARE_NBR = ap.Share_Nbr AND CAST(a.XPTIMESTAMP AS DATE) <= CAST(ap.missing_date AS DATE) AND CAST(a.XPTIMESTAMP AS DATE) > EOMONTH(CAST(ap.missing_date AS DATE),-2)
 WHERE a.rownum = 1 
 
@@ -2193,7 +2220,7 @@ SELECT DISTINCT
 	 ,pq.[CURRENT TIN STATUS] [PREV QTR STATUS]
 	 ,ye.[CURRENT TIN STATUS] [PREV YE Status]
 	 ,d.PREVMONTHEND
-	 ,a.BRANCH_NBR [BRANCH]
+	,a.MEMBER_BRANCH [BRANCH]
 	 ,lm.BRANCH [PREV BRANCH]
 	 ,c.OPN_LN_BAL [OPEN LOAN BALANCE]
 	 ,NULL [ZIP_STR]
