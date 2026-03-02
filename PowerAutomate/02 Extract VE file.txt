@@ -452,10 +452,10 @@ DateTime.Add DateTime: CurrentDateTime TimeToAdd: $'''-%TextAsNumber%''' TimeUni
 Text.ConvertDateTimeToText.FromCustomDateTime DateTime: ResultedDate CustomFormat: $'''yyyyMM''' Result=> FormattedDateTime
 Text.ConvertDateTimeToText.FromCustomDateTime DateTime: ResultedDate CustomFormat: $'''MM_dd_yyyy''' Result=> FormattedDateTime2
 Text.ConvertDateTimeToText.FromCustomDateTime DateTime: ResultedDate CustomFormat: $'''yyyy''' Result=> FormattedDateTime3
-File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: QueryResult CSVFile: $'''C:\\Users\\mcochrum\\Documents\\VE.rpt''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
-IF (Folder.IfFolderExists.DoesNotExist Path: $'''W:\\Departments\\VE Documents\\%FormattedDateTime2%\\XP2\\''') THEN
-    Folder.Create FolderPath: $'''W:\\Departments\\VE Documents\\''' FolderName: $'''%FormattedDateTime2%\\XP2\\''' Folder=> NewFolder
+File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: QueryResult CSVFile: $'''C:\\Temp\\Documents\\VE.rpt''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+IF (Folder.IfFolderExists.DoesNotExist Path: $'''\\\\picard\\User\\Departments\\VE Documents\\%FormattedDateTime3%\\%FormattedDateTime2%\\XP2\\''') THEN
+    Folder.Create FolderPath: $'''\\\\picard\\User\\Departments\\VE Documents\\''' FolderName: $'''%FormattedDateTime3%\\%FormattedDateTime2%\\XP2\\''' Folder=> NewFolder
 END
-IF (Folder.IfFolderExists.Exists Path: $'''W:\\Departments\\VE Documents\\%FormattedDateTime2%\\XP2\\''') THEN
-    File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: QueryResult CSVFile: $'''W:\\Departments\\VE Documents\\%FormattedDateTime2%\\XP2\\%FormattedDateTime%VE.rpt''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+IF (Folder.IfFolderExists.Exists Path: $'''\\\\picard\\User\\Departments\\VE Documents\\%FormattedDateTime3%\\%FormattedDateTime2%\\XP2\\''') THEN
+    File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: QueryResult CSVFile: $'''\\\\picard\\User\\Departments\\VE Documents\\%FormattedDateTime3%\\%FormattedDateTime2%\\XP2\\%FormattedDateTime%VE.rpt''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
 END
