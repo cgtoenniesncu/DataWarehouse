@@ -1,0 +1,10 @@
+Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''\\\\picard\\User\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_Student Loans.csv''' Visible: True ReadOnly: True UseMachineLocale: False Instance=> ExcelInstance
+Excel.SetActiveWorksheet.ActivateWorksheetByName Instance: ExcelInstance Name: $'''%Year%%Month%%Day%_NeighborsCU_Student Lo'''
+Excel.ReadFromExcel.ReadAllCells Instance: ExcelInstance FirstLineIsHeader: True GetCellContentsMode: Excel.GetCellContentsMode.FormattedTextValues RangeValue=> ExcelData
+SET LastColumn TO ExcelData.Columns.Count
+Variables.DecreaseVariable Value: LastColumn DecrementValue: 1
+SET LastRow TO ExcelData.RowsCount
+Variables.DecreaseVariable Value: LastRow DecrementValue: 1
+Variables.ModifyDataTableItem DataTable: ExcelData ColumnNameOrIndex: LastColumn RowIndex: LastRow Value: $'''END'''
+File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: ExcelData CSVFile: $'''\\\\picard\\User\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_PSL.txt''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+Excel.CloseExcel.Close Instance: ExcelInstance
