@@ -7,4 +7,5 @@ SET LastRow TO ExcelData.RowsCount
 Variables.DecreaseVariable Value: LastRow DecrementValue: 1
 Variables.ModifyDataTableItem DataTable: ExcelData ColumnNameOrIndex: LastColumn RowIndex: LastRow Value: $'''END'''
 File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: ExcelData CSVFile: $'''\\\\picard\\User\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_PSL.txt''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+Variables.ClearList List: ExcelData
 Excel.CloseExcel.Close Instance: ExcelInstance
