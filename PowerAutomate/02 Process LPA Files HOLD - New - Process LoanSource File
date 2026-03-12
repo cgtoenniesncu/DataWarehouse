@@ -1,0 +1,4 @@
+IF (File.IfFile.Exists File: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_CULoanSource.csv''') THEN
+    File.ReadFromCSVFile.ReadCSV CSVFile: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_CULoanSource.csv''' Encoding: File.CSVEncoding.UTF8 TrimFields: True FirstLineContainsColumnNames: False ColumnsSeparator: File.CSVColumnsSeparator.Comma CSVTable=> CSVTable
+    File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: CSVTable CSVFile: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_LoanSource_pipe.csv''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: False IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+END
