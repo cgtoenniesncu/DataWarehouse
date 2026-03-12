@@ -1,0 +1,4 @@
+Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_CULoanStreet.csv''' Visible: True ReadOnly: True UseMachineLocale: False Instance=> ExcelInstance
+Excel.ReadFromExcel.ReadAllCells Instance: ExcelInstance FirstLineIsHeader: True GetCellContentsMode: Excel.GetCellContentsMode.FormattedTextValues RangeValue=> ExcelData
+File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: ExcelData CSVFile: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_CULoanStreet_pipe.csv''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+Excel.CloseExcel.Close Instance: ExcelInstance
