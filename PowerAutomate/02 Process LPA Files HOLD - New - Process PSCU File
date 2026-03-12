@@ -1,0 +1,9 @@
+IF (File.IfFile.Exists File: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_PSCU.txt''') THEN
+    File.ReadFromCSVFile.ReadCSV CSVFile: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_PSCU.txt''' Encoding: File.CSVEncoding.UTF8 TrimFields: True FirstLineContainsColumnNames: False ColumnsSeparator: File.CSVColumnsSeparator.Tab CSVTable=> CSVTable
+    File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: CSVTable CSVFile: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_PSCU_pipe.csv''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: False IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+END
+DISABLE IF (File.IfFile.Exists File: $'''\\\\picard\\user\\Departments\\VE Documents\\%Year%\\%Month%_%Day%_%Year%\\PSCU Credit Card\\PSCU.xlsx''') THEN
+    DISABLE Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''\\\\picard\\user\\Departments\\VE Documents\\%Year%\\%Month%_%Day%_%Year%\\PSCU Credit Card\\PSCU.xlsx''' Visible: True ReadOnly: True UseMachineLocale: False Instance=> ExcelInstance
+    DISABLE Excel.SaveExcel.SaveAs Instance: ExcelInstance DocumentFormat: Excel.ExcelFormat.CSV DocumentPath: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_PSCU.csv'''
+    DISABLE Excel.CloseExcel.Close Instance: ExcelInstance
+DISABLE END
