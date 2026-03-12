@@ -5,8 +5,11 @@ Text.ToNumber Text: CurrentDay Number=> TextAsNumber
 DateTime.Add DateTime: CurrentDateTime TimeToAdd: $'''-%TextAsNumber%''' TimeUnit: DateTime.TimeUnit.Days ResultedDate=> EndofMonth
 DISABLE Display.InputDialog Title: $'''End of Month Date''' Message: $'''Enter End of Month Date as MM/DD/YYYY''' InputType: Display.InputType.SingleLine IsTopMost: True UserInput=> UserInput ButtonPressed=> ButtonPressed
 Text.ConvertDateTimeToText.FromCustomDateTime DateTime: EndofMonth CustomFormat: $'''yyyy''' Result=> Year
+DISABLE SET Year TO 2025
 Text.ConvertDateTimeToText.FromCustomDateTime DateTime: EndofMonth CustomFormat: $'''MM''' Result=> Month
+DISABLE SET Month TO 12
 Text.ConvertDateTimeToText.FromCustomDateTime DateTime: EndofMonth CustomFormat: $'''dd''' Result=> Day
+DISABLE SET Day TO 31
 @@flowname: 'Process Loan Street File'
 DISABLE External.RunFlow FlowId: '2e057d10-9248-42b2-b8e6-422cd4b8ff56'
 IF (Folder.IfFolderExists.Exists Path: $'''\\\\picard\\User\\Departments\\VE Documents\\%Year%\\%Month%_%Day%_%Year%''') THEN
@@ -286,6 +289,7 @@ EXEC(@SQL)
 DELETE FROM [NCino Data Files].dbo.STAGING_CONSOLIDATED_STUDENT WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
 INSERT INTO [NCino Data Files].dbo.STAGING_CONSOLIDATED_STUDENT
 SELECT * FROM #temptable
+order by [Charge_Off_Prin_Lifetime_Lender]  desc
 
 DROP TABLE IF EXISTS #temptable
 ''' Timeout: 30 Result=> QueryResult
@@ -1663,6 +1667,7 @@ DECLARE @lastdate DATE = (SELECT CAST(CONVERT(VARCHAR,MAX(ASOFDATE),101) AS DATE
 DELETE FROM [NCino Data Files].dbo.STAGING_STUDENT WHERE CAST(CONVERT(VARCHAR,ASOFDATE,101) AS DATE) = @date
 INSERT INTO [NCino Data Files].dbo.STAGING_STUDENT
 SELECT * FROM #temptable
+order by [Charge_Off_Prin_Lifetime_Lender]  desc
 
 DROP TABLE IF EXISTS #temptable
 ''' Timeout: 30 Result=> QueryResult
@@ -1945,6 +1950,8 @@ SELECT @DATE [ASOFDATE],
       ,[COLPURCHASEPRICE_3]
       ,[COLRESIDENCETYPE_3]
 FROM #temptable WHERE MEMBER_NBR is NOT null
+
+order by  [WOFF_AMOUNT] desc
 
 DROP TABLE IF EXISTS #temptable
 ''' Timeout: 30 Result=> QueryResult
@@ -2548,6 +2555,8 @@ FROM dw1.dbo.view_Loan_Dashboards WHERE AS_OF_DATE = @Processdate
 
 )a WHERE a.ROWNUM = 1
 
+
+
 DROP TABLE IF EXISTS #temptable10
 
 SELECT * INTO #temptable10 FROM (
@@ -2583,7 +2592,7 @@ SELECT *, ROW_NUMBER() OVER (PARTITION BY B.MEMBER_NBR, B.LOAN_NBR, B.OPEN_DATE 
 
 DELETE FROM [DW-LPA].dbo.Fact_Loan WHERE [Data Source] = \'XP2\' AND unique_ID IN 
 
-(SELECT Convert(VARCHAR,e.[MEMBER NUMBER])+CONVERT(VARCHAR,e.[LOAN NUMBER])+ CONVERT( VARCHAR, CAST(e.[OPEN DATE] AS DATE)) +CONVERT(VARCHAR,ISNULL(e.[LOAN TYPE],\'\'))  [Unique_ID]
+(SELECT Convert(VARCHAR(30),e.[MEMBER NUMBER])+CONVERT(VARCHAR(30),e.[LOAN NUMBER])+ CONVERT( VARCHAR, CAST(e.[OPEN DATE] AS DATE)) +CONVERT(VARCHAR,ISNULL(e.[LOAN TYPE],\'\'))  [Unique_ID]
 
 FROM 
 #temptable3 e  )
@@ -2661,17 +2670,17 @@ SELECT
 
 
 FROM #temptable3 a
---JOIN #temptable15 B 
---		ON A.[MEMBER NUMBER] = B.MEMBER_NBR 
---		AND A.[LOAN NUMBER] = B.LOAN_NBR 
---		AND A.[LOAN TYPE] = B.LOAN_TYPE 	
---		AND a.[OPEN DATE] = b.OPEN_DATE
---		AND CONVERT(VARCHAR,CAST(A.AS_OF_DATE AS DATE),101) = CONVERT(VARCHAR,CAST(B.ASOFDATE AS DATE),101)
+JOIN #temptable15 B 
+		ON A.[MEMBER NUMBER] = CONVERT(VARCHAR(50),B.MEMBER_NBR)
+		AND A.[LOAN NUMBER] = CONVERT(VARCHAR(50),B.LOAN_NBR) 
+		AND A.[LOAN TYPE] = B.LOAN_TYPE 	
+		AND a.[OPEN DATE] = b.OPEN_DATE
+		AND CONVERT(VARCHAR,CAST(A.AS_OF_DATE AS DATE),101) = CONVERT(VARCHAR,CAST(B.ASOFDATE AS DATE),101)
  LEFT JOIN [DW-LPA].dbo.Dim_LoanType c on c.[Loan Type] = IIF(CONVERT(VARCHAR,A.[LOAN TYPE]) = \'21\', COALESCE(CONVERT(VARCHAR,A.[LOAN TYPE]),CONVERT(VARCHAR,A.[LOAN TYPE]),A.[LOAN TYPE]), CONVERT(VARCHAR,A.[LOAN TYPE]))
- LEFT JOIN #temptable10 e ON a.[MEMBER NUMBER] = e.MEMBER_NBR AND a.[LOAN NUMBER] = e.LOAN_NBR AND a.[OPEN DATE] = e.OPEN_DATE
+ LEFT JOIN #temptable10 e ON a.[MEMBER NUMBER] = CONVERT(VARCHAR(50),e.MEMBER_NBR) AND a.[LOAN NUMBER] = CONVERT(VARCHAR(50),e.LOAN_NBR) AND a.[OPEN DATE] = e.OPEN_DATE
  LEFT JOIN #temptable1 h ON a.[MEMBER NUMBER] = h.MemberNumber AND a.[LOAN NUMBER] = h.LoanNumber
  LEFT JOIN (SELECT APLNUM, MAX(TOTMGIN )TOTMGIN, MAX(UNSEC_DEBT_RATIO_BFR) UNSEC_DEBT_RATIO_BFR, MAX(DBTRATIO) DBTRATIO FROM XP2_MonthEnd_ODS.db2inst1.APPLICATION GROUP BY APLNUM) G ON CONVERT(VARCHAR,E.LOAN_NOTE_NBR) = CONVERT(VARCHAR,G.APLNUM)
- left join [NCino Data Files].dbo.staging_XP o ON a.[MEMBER NUMBER] = o.MEMBER_NBR AND a.[LOAN NUMBER] = o.LOAN_NBR AND a.[OPEN DATE] = o.OPEN_DATE AND a.AS_OF_DATE = o.ASOFDATE
+ left join [NCino Data Files].dbo.staging_XP o ON a.[MEMBER NUMBER] = CONVERT(VARCHAR(30),o.MEMBER_NBR) AND a.[LOAN NUMBER] = CONVERT(VARCHAR(30),o.LOAN_NBR) AND a.[OPEN DATE] = o.OPEN_DATE AND a.AS_OF_DATE = o.ASOFDATE
  left JOIN #TEMPTABLE6 q ON a.[MEMBER NUMBER] = q.[MEMBER NUMBER]''' Timeout: 180 Result=> XPLoan
 Database.Close Connection: SQLConnection
 Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
@@ -4327,5 +4336,5 @@ SELECT
 
 FROM #temptable6''' Timeout: 2400
 Database.Close Connection: SQLConnection
-Folder.GetFiles Folder: $'''W:\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER''' FileFilter: $'''*''' IncludeSubfolders: False FailOnAccessDenied: True SortBy1: Folder.SortBy.NoSort SortDescending1: False SortBy2: Folder.SortBy.NoSort SortDescending2: False SortBy3: Folder.SortBy.NoSort SortDescending3: False Files=> Files2
+Folder.GetFiles Folder: $'''\\\\picard\\User\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER''' FileFilter: $'''*''' IncludeSubfolders: False FailOnAccessDenied: True SortBy1: Folder.SortBy.NoSort SortDescending1: False SortBy2: Folder.SortBy.NoSort SortDescending2: False SortBy3: Folder.SortBy.NoSort SortDescending3: False Files=> Files2
 File.Delete Files: Files2
