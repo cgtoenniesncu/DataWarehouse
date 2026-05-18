@@ -1,3 +1,4 @@
+# Latest Change 4/29/2026
 File.Delete Files: $'''\\\\picard\\User\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\*'''
 DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateOnly CurrentDateTime=> CurrentDateTime
 Text.ConvertDateTimeToText.FromCustomDateTime DateTime: CurrentDateTime CustomFormat: $'''dd''' Result=> CurrentDay
@@ -38,6 +39,7 @@ IF (File.IfFile.Exists File: $'''\\\\picard\\user\\Departments\\Vendor Collab\\C
     Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_Loans.csv''' Visible: True ReadOnly: False UseMachineLocale: False Instance=> ExcelInstance
     Excel.ReadFromExcel.ReadAllCells Instance: ExcelInstance GetCellContentsMode: Excel.GetCellContentsMode.TypedValues FirstLineIsHeader: True RangeValue=> ExcelData
     File.WriteToCSVFile.WriteCSVWithCustomSeparator VariableToWrite: ExcelData CSVFile: $'''\\\\picard\\user\\Departments\\Vendor Collab\\CUBI\\nCino Loan Files\\LOAD FOLDER\\%Year%%Month%%Day%_NeighborsCU_Loans_pipe.csv''' CsvFileEncoding: File.CSVEncoding.UTF8 IncludeColumnNames: True IfFileExists: File.IfFileExists.Overwrite CustomColumnsSeparator: $'''|'''
+    Variables.ClearList List: ExcelData
     Excel.CloseExcel.Close Instance: ExcelInstance
 END
 Database.Connect ConnectionString: $'''Provider=SQLOLEDB.1;Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=NCino Data Files;Data Source=NCURPT2''' Connection=> SQLConnection
@@ -2678,7 +2680,7 @@ JOIN #temptable15 B
 		AND CONVERT(VARCHAR,CAST(A.AS_OF_DATE AS DATE),101) = CONVERT(VARCHAR,CAST(B.ASOFDATE AS DATE),101)
  LEFT JOIN [DW-LPA].dbo.Dim_LoanType c on c.[Loan Type] = IIF(CONVERT(VARCHAR,A.[LOAN TYPE]) = \'21\', COALESCE(CONVERT(VARCHAR,A.[LOAN TYPE]),CONVERT(VARCHAR,A.[LOAN TYPE]),A.[LOAN TYPE]), CONVERT(VARCHAR,A.[LOAN TYPE]))
  LEFT JOIN #temptable10 e ON a.[MEMBER NUMBER] = CONVERT(VARCHAR(50),e.MEMBER_NBR) AND a.[LOAN NUMBER] = CONVERT(VARCHAR(50),e.LOAN_NBR) AND a.[OPEN DATE] = e.OPEN_DATE
- LEFT JOIN #temptable1 h ON a.[MEMBER NUMBER] = h.MemberNumber AND a.[LOAN NUMBER] = h.LoanNumber
+ LEFT JOIN #temptable1 h ON a.[MEMBER NUMBER] = h.MemberNumber AND a.[LOAN NUMBER] = CONVERT(VARCHAR(50),h.LoanNumber)
  LEFT JOIN (SELECT APLNUM, MAX(TOTMGIN )TOTMGIN, MAX(UNSEC_DEBT_RATIO_BFR) UNSEC_DEBT_RATIO_BFR, MAX(DBTRATIO) DBTRATIO FROM XP2_MonthEnd_ODS.db2inst1.APPLICATION GROUP BY APLNUM) G ON CONVERT(VARCHAR,E.LOAN_NOTE_NBR) = CONVERT(VARCHAR,G.APLNUM)
  left join [NCino Data Files].dbo.staging_XP o ON a.[MEMBER NUMBER] = CONVERT(VARCHAR(30),o.MEMBER_NBR) AND a.[LOAN NUMBER] = CONVERT(VARCHAR(30),o.LOAN_NBR) AND a.[OPEN DATE] = o.OPEN_DATE AND a.AS_OF_DATE = o.ASOFDATE
  left JOIN #TEMPTABLE6 q ON a.[MEMBER NUMBER] = q.[MEMBER NUMBER]''' Timeout: 180 Result=> XPLoan
