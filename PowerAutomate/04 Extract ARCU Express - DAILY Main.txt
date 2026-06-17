@@ -5,7 +5,7 @@ SET LastErrorMessage TO $'''none'''
 ERROR => LastError
 CALL LogProgress
 **ENDREGION
-SET SkipSection TO $'''True'''
+SET SkipSection TO $'''False'''
 IF SkipSection <> $'''True''' THEN
     **REGION LOAD ARCU TABLES INTO ODS - DISABLED
     Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
@@ -108,9 +108,6 @@ SELECT * FROM #temp1
 EXEC(@SQL)''' Timeout: 900 Result=> QueryResult
             ON ERROR SqlStatementError
                 SET loadVar TO $'''Failed'''
-                THROW ERROR
-            ON ERROR
-
             END
             IF loadVar = $'''Failed''' THEN
                 Variables.IncreaseVariable Value: FailedCount IncrementValue: 1
