@@ -3546,6 +3546,7 @@ Database.Close Connection: SQLConnection
 Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''-- View_MemberDashboard
 -- 2:40
+-- Update for close dates
 
 --select AS_OF_DATE,count(*) from dw1.dbo.View_MemberDashboard
 --where AS_OF_DATE>GETDATE() -15
@@ -3557,7 +3558,7 @@ DROP TABLE IF EXISTS #MemberDates
 SELECT * INTO #MemberDates 
 FROM (
 	SELECT DISTINCT AS_OF_DATE FROM DW1.dbo.view_MemberDashboard
---	where AS_OF_DATE<> \'2026-06-01\'
+--	where AS_OF_DATE<> \'2026-06-23\'
 	) temp
 
 DROP TABLE IF EXISTS #DatesToLoad;
@@ -3609,6 +3610,7 @@ FROM
 		SELECT 
 			acct.accountnumber MEMBER_NBR, 
 			acct.opendate OPEN_DATE, 
+			acct.CloseDate,
 			lnss.chargeoffdate WOFF_DATE, 
 			shss.OPN_SV_BAL,
 			shss.SV_REG_CNT, 
@@ -3619,8 +3621,10 @@ FROM
 			shss.SV_CERT_BAL,
 			shss.SV_CLB_CNT, 
 			shss.SV_CLB_BAL,
+			shss.closedate LST_SV_CLS_DATE,
 			lnss.OPN_LN_ALL_CNT, 
 			lnss.OPN_LN_BAL,
+			lnss.CloseDate LST_LN_CLS_DATE,
 		ROW_NUMBER() OVER (PARTITION BY ACCT.ACCOUNTNUMBER ORDER BY ACCT.PROCESSDATE DESC)ROWNUM
 		FROM 
 			[899.ARCU.JHAHOSTED.COM, 12001].[SYMANALYTICS].ODS.account acct
@@ -3629,6 +3633,7 @@ FROM
 				accountnumber,
 				count(loanid) as OPN_LN_ALL_CNT,
 				sum(balance) as OPN_LN_BAL,
+				max(closedate) as CloseDate,
 				max(chargeoffdate) as chargeoffdate
 			From 
 				[899.ARCU.JHAHOSTED.COM, 12001].symanalytics.ods.loansnapshot lss
@@ -3641,6 +3646,7 @@ FROM
 			(
 				select
 					accountnumber,
+					max(closedate) as CloseDate,
 					sum(balance) OPN_SV_BAL,
 					count(CASE WHEN SHARECODE = 0 THEN SHAREID END) AS SV_REG_CNT,		-- Share
 					sum(CASE WHEN SHARECODE = 0 THEN balance END) AS SV_REG_BAL,		-- Share
@@ -3771,8 +3777,8 @@ SELECT DISTINCT
 	,c.LN_REG_BAL
 	,c.LN_STU_CNT
 	,c.LN_STU_BAL
-	,c.LST_LN_CLS_DATE
-	,c.LST_SV_CLS_DATE
+	,b.LST_LN_CLS_DATE	-- LAST LOAN CLOSE DATE
+	,b.LST_SV_CLS_DATE	-- LAST SHARE CLOSE DATE
 	,c.MAX_DAYS_DELQ_CNT
 	,c.MAX_MTHS_DELQ_CNT
 	,b.OPN_LN_ALL_CNT	-- OPEN LOAN COUNT
@@ -3796,7 +3802,7 @@ SELECT DISTINCT
 	END [CLOSE REASON]
 	,\'\'
 	,\'\'
-	,null [Close Date]
+	,b.CloseDate [Close Date]	-- ACCOUNT CLOSE DATE
 	,a.STATUS
 	,b.OPEN_DATE
 	,lm.[CURRENT TIN STATUS] [PREV TIN STATUS]
