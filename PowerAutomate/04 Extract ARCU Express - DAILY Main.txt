@@ -1901,6 +1901,12 @@ BEGIN
 				userchar1 as CLOSEREASON,
 				RECORDCHANGEDATE 
 			From [899.ARCU.JHAHOSTED.COM, 12001].sym000.dbo.tracking where type=90
+			union
+			select 
+				cast(parentaccount as bigint) as [MEMBER_NBR], 
+				userchar1 as CLOSEREASON,
+				RECORDCHANGEDATE 
+			From [899.ARCU.JHAHOSTED.COM, 12001].sym000.dbo.savingstracking where type=90
 		)a) tempCloseReason
 		WHERE rownum = 1
 
