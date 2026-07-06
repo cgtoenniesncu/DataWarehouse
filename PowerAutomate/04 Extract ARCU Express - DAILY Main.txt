@@ -1,3 +1,4 @@
+# 7/5/2026 - Added an "Enabeled" field to the ARCU_Key_Tables table to control which tables to copy so the need for the "SkipSection" variable is no longer needed
 **REGION Log Start of Flow
 SET FlowName TO $'''04_Extract_ARCU_Express_DAILY'''
 SET MessageToLog TO $'''Starting Flow'''
@@ -5,9 +6,10 @@ SET LastErrorMessage TO $'''none'''
 ERROR => LastError
 CALL LogProgress
 **ENDREGION
+# Added an "Enabeled" field to the ARCU_Key_Tables table to control which tables to copy so the need for the "SkipSection" variable is no longer needed
 SET SkipSection TO $'''False'''
 IF SkipSection <> $'''True''' THEN
-    **REGION LOAD ARCU TABLES INTO ODS - DISABLED
+    **REGION LOAD ARCU TABLES INTO ODS
     Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
     # IDENTIFY ARCU TABLES THAT DO NOT HAVE HISTORY TO COPY TO OUR DATA WAREHOUSE
     Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''USE ReferenceTables
@@ -20,6 +22,7 @@ Select -- From ARCU_Key_Tables
 	Dest_Database, 
 	Dest_Schema, 
 	HasTimeStamp,
+	Enabled,
 	row_number() OVER (
 					Order by 
 					Source_LinkedServer, 
@@ -30,7 +33,8 @@ Select -- From ARCU_Key_Tables
 					Dest_Schema, 
 					HasTimeStamp) as RowNum
 FROM 
-	ARCU_Key_Tables ''' Timeout: 600 Result=> ARCU_Tables
+	ARCU_Key_Tables 
+Where Enabled = 1''' Timeout: 600 Result=> ARCU_Tables
     Database.Close Connection: SQLConnection
     # SET VARIABLE EQUAL TO NUMBER OF ARCU TABLES TO COPY
     SET RowCount TO ARCU_Tables.RowsCount
@@ -51,6 +55,7 @@ Select * From
 		Dest_Database, 
 		Dest_Schema, 
 		HasTimeStamp,
+		Enabled,
 		row_number() OVER (
 						Order by 
 						Source_LinkedServer, 
@@ -62,6 +67,7 @@ Select * From
 						HasTimeStamp) as RowNum
 	FROM 
 		ARCU_Key_Tables 
+	WHERE Enabled = 1
 	) TableList
 WHERE TableList.RowNum = %ARCUTableCount%
 
