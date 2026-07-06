@@ -1,4 +1,5 @@
-# 7/5/2026 - Added an "Enabeled" field to the ARCU_Key_Tables table to control which tables to copy so the need for the "SkipSection" variable is no longer needed
+/# 7/5/2026 - Added an "Enabeled" field to the ARCU_Key_Tables table to control which tables to copy so the need for the "SkipSection" variable is no longer needed
+7/5/2026 - Performance fix in the UPDATE FILE DATE step#/
 **REGION Log Start of Flow
 SET FlowName TO $'''04_Extract_ARCU_Express_DAILY'''
 SET MessageToLog TO $'''Starting Flow'''
@@ -138,14 +139,16 @@ Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''--
 
 DROP TABLE IF EXISTS #temp1
 SELECT * INTO #temp1 FROM (
-
-SELECT 
-	TRY_CAST(CAST(ProcessDate AS CHAR(8)) AS DATE) as ProcessDate,
-	ROW_NUMBER() OVER (ORDER BY ProcessDate )rownum 
-FROM 
-	[899.ARCU.JHAHOSTED.COM, 12001].[SYMANALYTICS].ODS.account
+Select * from 
+	(
+	SELECT 
+		TRY_CAST(CAST(ProcessDate AS CHAR(8)) AS DATE) as ProcessDate
+	FROM 
+		[899.ARCU.JHAHOSTED.COM, 12001].[SYMANALYTICS].ODS.account
+	group by ProcessDate 
+	) ARCU_Dates
 WHERE 
-	TRY_CAST(CAST(ProcessDate AS CHAR(8)) AS DATE) NOT IN 
+	ProcessDate NOT IN 
 	(
 		SELECT asofdate
 		FROM ReferenceTables.dbo.dim_FileDate
