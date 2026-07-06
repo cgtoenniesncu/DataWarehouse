@@ -139,13 +139,15 @@ Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''--
 
 DROP TABLE IF EXISTS #temp1
 SELECT * INTO #temp1 FROM (
-Select * from 
-	(
-	SELECT 
+SELECT 
+	ProcessDate,
+	ROW_NUMBER() OVER (ORDER BY ProcessDate )rownum 
+FROM 
+	(SELECT 
 		TRY_CAST(CAST(ProcessDate AS CHAR(8)) AS DATE) as ProcessDate
-	FROM 
+	From 
 		[899.ARCU.JHAHOSTED.COM, 12001].[SYMANALYTICS].ODS.account
-	group by ProcessDate 
+	group by ProcessDate
 	) ARCU_Dates
 WHERE 
 	ProcessDate NOT IN 
