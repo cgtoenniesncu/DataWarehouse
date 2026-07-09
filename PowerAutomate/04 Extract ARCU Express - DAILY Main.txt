@@ -1,5 +1,8 @@
 /# 7/5/2026 - Added an "Enabeled" field to the ARCU_Key_Tables table to control which tables to copy so the need for the "SkipSection" variable is no longer needed
-7/5/2026 - Performance fix in the UPDATE FILE DATE step#/
+7/5/2026 - Performance fix in the UPDATE FILE DATE step
+7/8/2026 - View_MemberDashboard population change when loading the Previous Month, Quarter and Year to include 'CORE' as a DATA SOURCE in addition to 'XP2'
+
+#/
 **REGION Log Start of Flow
 SET FlowName TO $'''04_Extract_ARCU_Express_DAILY'''
 SET MessageToLog TO $'''Starting Flow'''
@@ -3562,8 +3565,9 @@ Database.Close Connection: SQLConnection
 #/
 Database.Connect ConnectionString: $'''Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Persist Security Info=False;User ID=\"\";Initial Catalog=XP2_Daily_ODS_new;Data Source=ncurpt2;Initial File Name=\"\";Server SPN=\"\";Authentication=\"\";Access Token=\"\"''' Connection=> SQLConnection
 Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''-- View_MemberDashboard
--- 2:40
 -- Update for close dates
+-- CGT 7/8/2026 - Updated the SQL that loads the Previous Month, Quarter and Year to 
+--   include \'CORE\' as a DATA SOURCE in addition to \'XP2\'
 
 --select AS_OF_DATE,count(*) from dw1.dbo.View_MemberDashboard
 --where AS_OF_DATE>GETDATE() -15
@@ -3575,7 +3579,7 @@ DROP TABLE IF EXISTS #MemberDates
 SELECT * INTO #MemberDates 
 FROM (
 	SELECT DISTINCT AS_OF_DATE FROM DW1.dbo.view_MemberDashboard
---	where AS_OF_DATE<> \'2026-06-23\'
+--	where AS_OF_DATE  not in (\'2026-07-08\')
 	) temp
 
 DROP TABLE IF EXISTS #DatesToLoad;
@@ -3704,7 +3708,7 @@ SELECT * INTO #viewHistoryPrevMonth_Member
 				ON a.AS_OF_DATE = b.PREVMONTHEND
 			WHERE 
 				b.ASOFDATE = @ProcessDate  
-				AND a.[DATA SOURCE] = \'XP2\'
+				AND a.[DATA SOURCE] in( \'XP2\',\'CORE\')
 		) TempPrevMonth
 
 DROP TABLE IF EXISTS #viewHistoryPrevQtr_Member
@@ -3718,7 +3722,7 @@ FROM
 			ON a.AS_OF_DATE = b.PREVQTREND
 		WHERE 
 			b.ASOFDATE = @ProcessDate  
-			AND a.[DATA SOURCE] = \'XP2\'
+			AND a.[DATA SOURCE] in( \'XP2\',\'CORE\')
 	) TempPrevQtr
 
 DROP TABLE IF EXISTS #viewHistoryPrevYe_Member
@@ -3732,7 +3736,7 @@ FROM
 			ON a.AS_OF_DATE = b.PREVYEND
 		WHERE 
 			b.ASOFDATE = @ProcessDate  
-			AND a.[DATA SOURCE] = \'XP2\'
+			AND a.[DATA SOURCE] in( \'XP2\',\'CORE\')
 	) TempPrevYear
 
 
