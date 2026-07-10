@@ -1,8 +1,9 @@
-/# 7/5/2026 - Added an "Enabeled" field to the ARCU_Key_Tables table to control which tables to copy so the need for the "SkipSection" variable is no longer needed
+/# Latest change 7/10/2026
+
+7/5/2026 - Added an "Enabeled" field to the ARCU_Key_Tables table to control which tables to copy so the need for the "SkipSection" variable is no longer needed
 7/5/2026 - Performance fix in the UPDATE FILE DATE step
 7/8/2026 - View_MemberDashboard population change when loading the Previous Month, Quarter and Year to include 'CORE' as a DATA SOURCE in addition to 'XP2'
-
-#/
+7/10/2026 - altered population of #MEMBERS to exclude charged off loans in the count and balance#/
 **REGION Log Start of Flow
 SET FlowName TO $'''04_Extract_ARCU_Express_DAILY'''
 SET MessageToLog TO $'''Starting Flow'''
@@ -3568,6 +3569,7 @@ Database.ExecuteSqlStatement.Execute Connection: SQLConnection Statement: $'''--
 -- Update for close dates
 -- CGT 7/8/2026 - Updated the SQL that loads the Previous Month, Quarter and Year to 
 --   include \'CORE\' as a DATA SOURCE in addition to \'XP2\'
+-- CGT 7/10/2026 - altered population of #MEMBERS to exclude charged off loans in the count and balance
 
 --select AS_OF_DATE,count(*) from dw1.dbo.View_MemberDashboard
 --where AS_OF_DATE>GETDATE() -15
@@ -3579,7 +3581,7 @@ DROP TABLE IF EXISTS #MemberDates
 SELECT * INTO #MemberDates 
 FROM (
 	SELECT DISTINCT AS_OF_DATE FROM DW1.dbo.view_MemberDashboard
---	where AS_OF_DATE  not in (\'2026-07-08\')
+--	where AS_OF_DATE  not in (\'2026-06-30\')
 	) temp
 
 DROP TABLE IF EXISTS #DatesToLoad;
@@ -3652,8 +3654,8 @@ FROM
 		left join 
 			(select 
 				accountnumber,
-				count(loanid) as OPN_LN_ALL_CNT,
-				sum(balance) as OPN_LN_BAL,
+				sum(CASE WHEN chargeoffdate is null THEN 1 else 0 END) as OPN_LN_ALL_CNT,
+				sum(CASE WHEN chargeoffdate is null THEN balance else 0 END) as OPN_LN_BAL,
 				max(closedate) as CloseDate,
 				max(chargeoffdate) as chargeoffdate
 			From 
